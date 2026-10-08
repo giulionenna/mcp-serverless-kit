@@ -1,0 +1,60 @@
+{
+  "name": "garmin",
+  "description": "garmin read-only tools",
+  "tools": [
+    {
+      "name": "daily_stats",
+      "description": "Read daily Garmin statistics.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "sleep",
+      "description": "Read Garmin sleep data.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "activities",
+      "description": "Read recent Garmin activities.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 20
+          }
+        },
+        "required": [
+          "limit"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

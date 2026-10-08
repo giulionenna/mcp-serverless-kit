@@ -1,0 +1,43 @@
+{
+  "name": "example",
+  "description": "example read-only tools",
+  "tools": [
+    {
+      "name": "echo",
+      "description": "Return a message; useful for testing without an external account.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "add",
+      "description": "Add two numbers.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "a": {
+            "type": "number"
+          },
+          "b": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ]
+}

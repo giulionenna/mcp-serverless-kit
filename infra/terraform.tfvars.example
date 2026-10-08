@@ -1,0 +1,8 @@
+aws_region = "us-east-1"
+project_name = "personal-mcp"
+# Replace with exact URLs provided by the clients you actually connect.
+callback_urls = ["https://example.com/replace-with-your-client-callback"]
+
+# Optional: serialize Garmin calls only after checking your regional Lambda quota.
+# Requires at least 101 currently unreserved concurrency units before reservation.
+# garmin_reserved_concurrency = 1

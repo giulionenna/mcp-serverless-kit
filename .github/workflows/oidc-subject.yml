@@ -1,0 +1,25 @@
+name: Show AWS OIDC subject
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  subject:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Print only non-secret claims for AWS trust configuration
+        shell: python
+        run: |
+          import os, urllib.request, json, base64
+          request = urllib.request.Request(
+              os.environ['ACTIONS_ID_TOKEN_REQUEST_URL'] + '&audience=sts.amazonaws.com',
+              headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+          with urllib.request.urlopen(request, timeout=20) as response:
+              token = json.load(response)['value']
+          encoded = token.split('.')[1]
+          claims = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
+          assert claims['aud'] == 'sts.amazonaws.com'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('Use this exact GitHubSubject for the bootstrap stack:\n\n`' + claims['sub'] + '`\n')

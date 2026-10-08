@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Check live MCP/OAuth discovery before attempting client integration; no login or secrets."""
+import argparse
+import json
+import urllib.error
+import urllib.request
+from pathlib import Path
+from urllib.parse import urlsplit
+
+class CheckFailure(ValueError):
+    pass
+
+def get_json(url):
+    if urlsplit(url).scheme != 'https':
+        raise CheckFailure('Discovery endpoints must use HTTPS.')
+    with urllib.request.urlopen(urllib.request.Request(url, headers={'Accept':'application/json'}), timeout=20) as response:
+        if response.geturl().split(':', 1)[0] != 'https':
+            raise CheckFailure('Discovery redirected to an insecure endpoint.')
+        return json.load(response)
+
+def assess_oidc(metadata, configured_scopes):
+    failures = []
+    if 'S256' not in metadata.get('code_challenge_methods_supported', []):
+        failures.append('Authorization server does not advertise PKCE S256. Cognito may omit this metadata field; client integration is blocked until tested/resolved.')
+    for key in ['issuer','authorization_endpoint','token_endpoint','jwks_uri']:
+        if not isinstance(metadata.get(key), str) or not metadata[key].startswith('https://'):
+            failures.append('Missing or insecure OIDC field: ' + key)
+    advertised = set(metadata.get('scopes_supported', [])) & {'openid', 'email', 'profile', 'phone'}
+    if advertised - set(configured_scopes):
+        failures.append('OIDC scopes advertised but not enabled for the app client: ' + ', '.join(sorted(advertised - set(configured_scopes))))
+    if 'authorization_code' not in metadata.get('grant_types_supported', ['authorization_code']):
+        failures.append('Authorization-code grant not advertised.')
+    return failures
+
+def run(outputs):
+    endpoint = outputs['mcp_url']['value']
+    issuer = outputs['oauth_issuer']['value']
+    scopes = outputs['oauth_scope']['value'].split()
+    protocol = {'jsonrpc':'2.0','id':1,'method':'initialize','params':{'protocolVersion':'2025-03-26','capabilities':{},'clientInfo':{'name':'mcp-kit-preflight','version':'0.1.0'}}}
+    request = urllib.request.Request(endpoint, data=json.dumps(protocol).encode(), headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'})
+    try:
+        with urllib.request.urlopen(request, timeout=20):
+            raise CheckFailure('Gateway accepted an unauthenticated MCP request; expected 401.')
+    except urllib.error.HTTPError as error:
+        if error.code != 401:
+            raise CheckFailure('Expected unauthenticated 401, received HTTP ' + str(error.code))
+        challenge = error.headers.get('WWW-Authenticate', '')
+    import re
+    match = re.search(r'resource_metadata="([^"]+)"', challenge)
+    if not match:
+        raise CheckFailure('401 response has no resource_metadata challenge.')
+    prm = get_json(match.group(1))
+    failures = []
+    custom_scopes = set(scopes) - {'openid', 'email', 'profile', 'phone'}
+    if custom_scopes - set(prm.get('scopes_supported', [])):
+        failures.append('Gateway protected-resource metadata does not advertise the required tools scope.')
+    if issuer not in prm.get('authorization_servers', []):
+        failures.append('Gateway protected-resource metadata does not advertise the configured Cognito issuer.')
+    if prm.get('resource') != endpoint:
+        failures.append('Gateway protected-resource resource identifier differs from the MCP URL; verify client resource binding.')
+    metadata = get_json(issuer.rstrip('/') + '/.well-known/openid-configuration')
+    if metadata.get('issuer') != issuer:
+        failures.append('Authorization server issuer mismatch.')
+    failures.extend(assess_oidc(metadata, scopes))
+    if failures:
+        for failure in failures:
+            print('FAIL: ' + failure)
+        return 1
+    print('Discovery checks passed. Browser authorization, token refresh and tools/call still require a live client test.')
+    return 0
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--outputs', required=True)
+    args = parser.parse_args()
+    try:
+        raise SystemExit(run(json.loads(Path(args.outputs).read_text())))
+    except (ValueError, KeyError, urllib.error.URLError) as error:
+        raise SystemExit('Preflight failed: ' + str(error))

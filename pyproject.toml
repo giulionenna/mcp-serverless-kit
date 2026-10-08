@@ -1,0 +1,17 @@
+[project]
+name = "mcp-serverless-kit"
+version = "0.1.0"
+description = "Small AgentCore Gateway Lambda module kit"
+requires-python = ">=3.12"
+dependencies = []
+[project.optional-dependencies]
+dev = ["pytest==8.3.5", "jsonschema==4.23.0"]
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+[tool.setuptools]
+packages = ["runtime"]

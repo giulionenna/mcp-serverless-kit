@@ -1,0 +1,123 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Personal MCP Terraform state and GitHub OIDC deployment bootstrap (review IAM before launch).
+Parameters:
+  ProjectName:
+    Type: String
+    Default: personal-mcp
+    AllowedPattern: '^[a-z][a-z0-9-]{2,24}$'
+  GitHubSubject:
+    Type: String
+    Description: Exact token sub for your repo and branch or environment; copy from GitHub documentation/settings. Includes immutable IDs for new repositories where applicable.
+    AllowedPattern: '^repo:.+$'
+  ExistingOidcProviderArn:
+    Type: String
+    Default: ''
+    Description: Existing token.actions.githubusercontent.com IAM OIDC provider ARN; leave empty only if this account has none.
+Conditions:
+  CreateOidc: !Equals [!Ref ExistingOidcProviderArn, '']
+Resources:
+  GitHubOidc:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+  StateBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub '${ProjectName}-${AWS::AccountId}-${AWS::Region}-tfstate'
+      VersioningConfiguration: {Status: Enabled}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: {SSEAlgorithm: AES256}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+  StateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: [!GetAtt StateBucket.Arn, !Sub '${StateBucket.Arn}/*']
+            Condition: {Bool: {'aws:SecureTransport': false}}
+  DeploymentRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-github-deploy'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If [CreateOidc, !Ref GitHubOidc, !Ref ExistingOidcProviderArn]
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringEquals:
+                'token.actions.githubusercontent.com:aud': sts.amazonaws.com
+                'token.actions.githubusercontent.com:sub': !Ref GitHubSubject
+      Policies:
+        - PolicyName: TerraformPersonalMcp
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: StateAndSchemaBuckets
+                Effect: Allow
+                Action: ['s3:ListBucket', 's3:ListBucketVersions', 's3:GetBucket*', 's3:GetEncryptionConfiguration', 's3:GetLifecycleConfiguration', 's3:GetReplicationConfiguration', 's3:CreateBucket', 's3:DeleteBucket', 's3:PutBucketPublicAccessBlock', 's3:PutEncryptionConfiguration', 's3:PutBucketTagging', 's3:PutBucketVersioning']
+                Resource: [!GetAtt StateBucket.Arn, !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-${AWS::AccountId}-${AWS::Region}-schemas']
+              - Sid: StateAndSchemaObjects
+                Effect: Allow
+                Action: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:GetObjectTagging', 's3:PutObjectTagging']
+                Resource: [!Sub '${StateBucket.Arn}/*', !Sub 'arn:${AWS::Partition}:s3:::${ProjectName}-${AWS::AccountId}-${AWS::Region}-schemas/*']
+              - Sid: ModuleFunctions
+                Effect: Allow
+                Action: ['lambda:CreateFunction', 'lambda:GetFunction', 'lambda:GetFunctionConfiguration', 'lambda:UpdateFunctionCode', 'lambda:UpdateFunctionConfiguration', 'lambda:DeleteFunction', 'lambda:ListVersionsByFunction', 'lambda:GetPolicy', 'lambda:TagResource', 'lambda:UntagResource', 'lambda:ListTags', 'lambda:GetFunctionCodeSigningConfig', 'lambda:GetRuntimeManagementConfig', 'lambda:GetFunctionConcurrency', 'lambda:PutFunctionConcurrency', 'lambda:DeleteFunctionConcurrency']
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-*'
+              - Sid: KitRoles
+                Effect: Allow
+                Action: ['iam:CreateRole', 'iam:GetRole', 'iam:DeleteRole', 'iam:UpdateAssumeRolePolicy', 'iam:PutRolePolicy', 'iam:GetRolePolicy', 'iam:DeleteRolePolicy', 'iam:ListRolePolicies', 'iam:ListAttachedRolePolicies', 'iam:ListInstanceProfilesForRole', 'iam:TagRole', 'iam:UntagRole']
+                Resource: [!Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-gateway', !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*-lambda']
+              - Sid: PassKitRoles
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: [!Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-gateway', !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*-lambda']
+                Condition:
+                  StringEquals:
+                    'iam:PassedToService': [lambda.amazonaws.com, bedrock-agentcore.amazonaws.com]
+              - Sid: ModuleLogs
+                Effect: Allow
+                Action: ['logs:CreateLogGroup', 'logs:DeleteLogGroup', 'logs:PutRetentionPolicy', 'logs:DeleteRetentionPolicy', 'logs:TagResource', 'logs:UntagResource', 'logs:ListTagsForResource']
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*'
+              - Sid: LogDiscovery
+                Effect: Allow
+                Action: logs:DescribeLogGroups
+                Resource: '*'
+              - Sid: GarminSecretContainer
+                Effect: Allow
+                Action: ['secretsmanager:CreateSecret', 'secretsmanager:DescribeSecret', 'secretsmanager:UpdateSecret', 'secretsmanager:DeleteSecret', 'secretsmanager:RestoreSecret', 'secretsmanager:TagResource', 'secretsmanager:UntagResource', 'secretsmanager:GetResourcePolicy']
+                Resource: !Sub 'arn:${AWS::Partition}:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:${ProjectName}/garmin-*'
+              # Cognito IDs and Gateway IDs are assigned at creation; this practical
+              # starter permits these control-plane operations account-wide in-region.
+              - Sid: CognitoControlPlane
+                Effect: Allow
+                Action: ['cognito-idp:CreateUserPool', 'cognito-idp:DescribeUserPool', 'cognito-idp:UpdateUserPool', 'cognito-idp:DeleteUserPool', 'cognito-idp:CreateUserPoolClient', 'cognito-idp:DescribeUserPoolClient', 'cognito-idp:UpdateUserPoolClient', 'cognito-idp:DeleteUserPoolClient', 'cognito-idp:CreateUserPoolDomain', 'cognito-idp:DescribeUserPoolDomain', 'cognito-idp:DeleteUserPoolDomain', 'cognito-idp:UpdateUserPoolDomain', 'cognito-idp:CreateResourceServer', 'cognito-idp:DescribeResourceServer', 'cognito-idp:UpdateResourceServer', 'cognito-idp:DeleteResourceServer', 'cognito-idp:ListTagsForResource', 'cognito-idp:TagResource', 'cognito-idp:UntagResource']
+                Resource: '*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+              - Sid: GatewayControlPlane
+                Effect: Allow
+                Action: ['bedrock-agentcore:CreateGateway', 'bedrock-agentcore:GetGateway', 'bedrock-agentcore:UpdateGateway', 'bedrock-agentcore:DeleteGateway', 'bedrock-agentcore:CreateGatewayTarget', 'bedrock-agentcore:GetGatewayTarget', 'bedrock-agentcore:UpdateGatewayTarget', 'bedrock-agentcore:DeleteGatewayTarget', 'bedrock-agentcore:ListGatewayTargets', 'bedrock-agentcore:TagResource', 'bedrock-agentcore:UntagResource', 'bedrock-agentcore:ListTagsForResource']
+                Resource: '*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+Outputs:
+  DeploymentRoleArn: {Value: !GetAtt DeploymentRole.Arn}
+  StateBucketName: {Value: !Ref StateBucket}
+  AWSRegion: {Value: !Ref 'AWS::Region'}
