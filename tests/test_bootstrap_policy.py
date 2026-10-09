@@ -94,9 +94,9 @@ def test_url_permissions_are_limited_to_adapter(action):
     assert not matches('lambda:' + action, arn.replace(REGION, 'eu-north-1'), 'eu-north-1')
 
 
-@pytest.mark.parametrize('operation', ['Create', 'Describe', 'Update', 'Delete'])
+@pytest.mark.parametrize('operation', ['CreateManagedLoginBranding', 'DescribeManagedLoginBranding', 'DescribeManagedLoginBrandingByClient', 'UpdateManagedLoginBranding', 'DeleteManagedLoginBranding'])
 def test_managed_login_branding_is_limited_to_user_pools_in_account_and_region(operation):
-    action = 'cognito-idp:' + operation + 'ManagedLoginBranding'
+    action = 'cognito-idp:' + operation
     arn = f'arn:aws:cognito-idp:{REGION}:{ACCOUNT}:userpool/{REGION}_example'
     assert matches(action, arn)
     assert not matches(action, arn.replace(ACCOUNT, '999999999999'))

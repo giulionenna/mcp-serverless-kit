@@ -125,7 +125,7 @@ Resources:
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               - Sid: CognitoManagedLoginBranding
                 Effect: Allow
-                Action: ['cognito-idp:CreateManagedLoginBranding', 'cognito-idp:DescribeManagedLoginBranding', 'cognito-idp:UpdateManagedLoginBranding', 'cognito-idp:DeleteManagedLoginBranding']
+                Action: ['cognito-idp:CreateManagedLoginBranding', 'cognito-idp:DescribeManagedLoginBranding', 'cognito-idp:DescribeManagedLoginBrandingByClient', 'cognito-idp:UpdateManagedLoginBranding', 'cognito-idp:DeleteManagedLoginBranding']
                 Resource: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               # Provider refresh resolves the app client that owns the style.
