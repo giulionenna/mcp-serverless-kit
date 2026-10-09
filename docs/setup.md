@@ -47,8 +47,14 @@ parameter values, including the exact GitHub subject and shared OIDC provider.
 It updates the existing stack without deleting the Terraform state bucket. The
 first live deployment found that the pinned provider also reads
 `cognito-idp:GetUserPoolMfaConfig`; this permission is included in the bootstrap.
+Gateway creation also creates an AgentCore workload identity on the caller's
+behalf. The bootstrap includes its create/read/update/delete lifecycle actions,
+limited to the default workload identity directory in this account and region.
+It grants no workload-token or credential-provider access. See
+[AWS Gateway permissions](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-prerequisites-permissions.html).
 After the update completes, rerun the failed `apply` so Terraform resumes from
-its saved state.
+its saved state. The pinned provider retains and taints a Gateway that fails
+during creation, allowing Terraform to remove it before retrying.
 
 ## 3. Set GitHub repository variables
 

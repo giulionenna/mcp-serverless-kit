@@ -117,6 +117,14 @@ Resources:
                 Action: ['bedrock-agentcore:CreateGateway', 'bedrock-agentcore:GetGateway', 'bedrock-agentcore:UpdateGateway', 'bedrock-agentcore:DeleteGateway', 'bedrock-agentcore:CreateGatewayTarget', 'bedrock-agentcore:GetGatewayTarget', 'bedrock-agentcore:UpdateGatewayTarget', 'bedrock-agentcore:DeleteGatewayTarget', 'bedrock-agentcore:ListGatewayTargets', 'bedrock-agentcore:TagResource', 'bedrock-agentcore:UntagResource', 'bedrock-agentcore:ListTagsForResource']
                 Resource: '*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+              # Gateway creates and manages an AgentCore workload identity on
+              # behalf of its caller. Service-generated identity names are not
+              # known before creation; restrict lifecycle access to this region/account.
+              - Sid: GatewayWorkloadIdentityLifecycle
+                Effect: Allow
+                Action: ['bedrock-agentcore:CreateWorkloadIdentity', 'bedrock-agentcore:GetWorkloadIdentity', 'bedrock-agentcore:UpdateWorkloadIdentity', 'bedrock-agentcore:DeleteWorkloadIdentity']
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
 Outputs:
   DeploymentRoleArn: {Value: !GetAtt DeploymentRole.Arn}
   StateBucketName: {Value: !Ref StateBucket}
