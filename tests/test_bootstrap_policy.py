@@ -92,3 +92,19 @@ def test_url_permissions_are_limited_to_adapter(action):
     assert not matches('lambda:' + action, arn.replace('-oauth-compat', '-example'))
     assert not matches('lambda:' + action, arn.replace(ACCOUNT, '999999999999'))
     assert not matches('lambda:' + action, arn.replace(REGION, 'eu-north-1'), 'eu-north-1')
+
+
+@pytest.mark.parametrize('operation', ['Create', 'Describe', 'Update', 'Delete'])
+def test_managed_login_branding_is_limited_to_user_pools_in_account_and_region(operation):
+    action = 'cognito-idp:' + operation + 'ManagedLoginBranding'
+    arn = f'arn:aws:cognito-idp:{REGION}:{ACCOUNT}:userpool/{REGION}_example'
+    assert matches(action, arn)
+    assert not matches(action, arn.replace(ACCOUNT, '999999999999'))
+    assert not matches(action, arn.replace(REGION, 'eu-north-1'), 'eu-north-1')
+    assert not matches(action, arn.replace('userpool/', 'identitypool/'))
+
+
+def test_branding_permissions_do_not_grant_user_creation_or_token_access():
+    arn = f'arn:aws:cognito-idp:{REGION}:{ACCOUNT}:userpool/{REGION}_example'
+    assert not matches('cognito-idp:AdminCreateUser', arn)
+    assert not matches('cognito-idp:AdminInitiateAuth', arn)

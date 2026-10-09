@@ -28,6 +28,10 @@ and scope. These comparisons never grant access, and claim values are not logged
    ID and exact callback allowlist. It requests `resource=<public MCP URL>` and
    the tools scope. Cognito resource binding sets that URL as access-token
    audience; OAuth refresh preserves the audience.
+   The pool explicitly uses the Essentials feature plan and domain branding
+   version 2 (Managed Login), with the default branding style assigned to the
+   app client. Resource binding is exclusive to Managed Login; the classic
+   hosted UI must not be used for this audience-bound flow.
 5. The adapter forwards JSON MCP requests and the unmodified bearer token to
    Gateway, which validates Cognito issuer/signature, client ID, public MCP
    audience and tools scope before invoking modules.
@@ -94,6 +98,10 @@ session validity window; sign in again after that window expires.
 The extra Lambda is invoked for discovery and every MCP HTTP request. It uses
 128 MiB, no provisioned concurrency, no VPC/NAT and no API Gateway. Normal
 Lambda, S3 and log charges apply; rejected public requests also consume resources.
+Managed Login requires Essentials or Plus. This kit chooses Essentials, whose
+direct-user free tier is 10,000 monthly active users per account or organization.
+Existing tokens keep their original audience when refreshed: after migrating
+from the classic hosted UI, perform a new authorization-code login.
 
 ## Verification limits
 

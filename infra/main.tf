@@ -36,7 +36,8 @@ resource "aws_s3_object" "schema" {
   depends_on   = [aws_s3_bucket_public_access_block.schemas]
 }
 resource "aws_cognito_user_pool" "users" {
-  name = var.project_name
+  name           = var.project_name
+  user_pool_tier = "ESSENTIALS"
   admin_create_user_config { allow_admin_create_user_only = true }
   username_attributes      = ["email"]
   auto_verified_attributes = ["email"]
@@ -84,8 +85,17 @@ resource "aws_cognito_user_pool_client" "mcp" {
   }
 }
 resource "aws_cognito_user_pool_domain" "mcp" {
-  domain       = "${local.prefix}-${var.aws_region}"
-  user_pool_id = aws_cognito_user_pool.users.id
+  domain                = "${local.prefix}-${var.aws_region}"
+  user_pool_id          = aws_cognito_user_pool.users.id
+  managed_login_version = 2
+}
+# RFC 8707 resource binding is a Managed Login feature. API-created app clients
+# also need an explicit branding style before Managed Login can serve them.
+resource "aws_cognito_managed_login_branding" "mcp" {
+  client_id                   = aws_cognito_user_pool_client.mcp.id
+  user_pool_id                = aws_cognito_user_pool.users.id
+  use_cognito_provided_values = true
+  depends_on                  = [aws_cognito_user_pool_domain.mcp]
 }
 resource "aws_iam_role" "lambda" {
   for_each           = local.modules

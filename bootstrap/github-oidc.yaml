@@ -118,6 +118,11 @@ Resources:
                 Action: ['cognito-idp:CreateUserPool', 'cognito-idp:DescribeUserPool', 'cognito-idp:GetUserPoolMfaConfig', 'cognito-idp:UpdateUserPool', 'cognito-idp:DeleteUserPool', 'cognito-idp:CreateUserPoolClient', 'cognito-idp:DescribeUserPoolClient', 'cognito-idp:UpdateUserPoolClient', 'cognito-idp:DeleteUserPoolClient', 'cognito-idp:CreateUserPoolDomain', 'cognito-idp:DescribeUserPoolDomain', 'cognito-idp:DeleteUserPoolDomain', 'cognito-idp:UpdateUserPoolDomain', 'cognito-idp:CreateResourceServer', 'cognito-idp:DescribeResourceServer', 'cognito-idp:UpdateResourceServer', 'cognito-idp:DeleteResourceServer', 'cognito-idp:ListTagsForResource', 'cognito-idp:TagResource', 'cognito-idp:UntagResource']
                 Resource: '*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+              - Sid: CognitoManagedLoginBranding
+                Effect: Allow
+                Action: ['cognito-idp:CreateManagedLoginBranding', 'cognito-idp:DescribeManagedLoginBranding', 'cognito-idp:UpdateManagedLoginBranding', 'cognito-idp:DeleteManagedLoginBranding']
+                Resource: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               - Sid: GatewayControlPlane
                 Effect: Allow
                 Action: ['bedrock-agentcore:CreateGateway', 'bedrock-agentcore:GetGateway', 'bedrock-agentcore:UpdateGateway', 'bedrock-agentcore:DeleteGateway', 'bedrock-agentcore:CreateGatewayTarget', 'bedrock-agentcore:GetGatewayTarget', 'bedrock-agentcore:UpdateGatewayTarget', 'bedrock-agentcore:DeleteGatewayTarget', 'bedrock-agentcore:ListGatewayTargets', 'bedrock-agentcore:TagResource', 'bedrock-agentcore:UntagResource', 'bedrock-agentcore:ListTagsForResource']

@@ -112,6 +112,14 @@ If the user was created but password configuration failed, fix the IAM/password 
 
 ## 6. Connect a client
 
+The audience-bound OAuth flow requires Cognito Managed Login: domain branding
+version 2, Essentials feature plan, and a branding style assigned to the app
+client. Terraform configures all three. When migrating an older deployment,
+first update the bootstrap permissions as described above, then run `plan` and
+`apply`. The branding actions are scoped to user pools in your AWS account and
+deployment region. Perform a fresh authorization-code login after the change;
+refreshing an older token preserves its previous audience.
+
 ### ChatGPT
 
 Create a custom remote MCP connection in the available developer/plugin settings. Use the apply summary's MCP URL and OAuth authentication with the preconfigured client ID. The kit uses a public client with no client secret; verify that the current setup UI accepts this configuration.
