@@ -2,7 +2,7 @@
 
 Deploy a modular personal MCP endpoint on AWS using **Amazon Bedrock AgentCore Gateway and AWS Lambda**. Fork the repository, enable modules, and deploy from GitHub Actions using short-lived AWS credentials.
 
-**Status: development preview.** The original Gateway, example Lambda and Cognito deployment completed in `eu-south-1` on 2026-10-09. Live preflight confirmed unauthenticated rejection and exposed missing PKCE metadata in Cognito discovery. This revision adds an AWS-only OAuth discovery/transport adapter; its deployment and browser OAuth flows with ChatGPT/Claude still require verification. An endpoint alone is not evidence of client compatibility. See [verification](docs/verification.md).
+**Status: development preview.** Gateway, example Lambda, Cognito and the AWS-only OAuth adapter were deployed in `eu-south-1` on 2026-10-09. Public adapter metadata advertises PKCE S256 and missing-token MCP requests return 401. Function URLs remap the discovery challenge header, so clients use MCP's standard well-known discovery fallback. Browser OAuth flows with ChatGPT/Claude remain unverified. An endpoint alone is not evidence of client compatibility. See [verification](docs/verification.md).
 
 ## What you get
 

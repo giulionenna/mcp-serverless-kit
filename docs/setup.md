@@ -1,6 +1,6 @@
 # Browser-only setup
 
-Use this from a fork in your own GitHub account and your own AWS account. No code needs to run on your computer. The original infrastructure was deployed in `eu-south-1`; the AWS-only OAuth adapter and ChatGPT/Claude connections still require live verification. Follow the verification gates below rather than assuming success.
+Use this from a fork in your own GitHub account and your own AWS account. No code needs to run on your computer. The infrastructure and AWS-only OAuth adapter were deployed in `eu-south-1`; authenticated tool calls and ChatGPT/Claude connections still require live verification. Follow the verification gates below rather than assuming success.
 
 ## Prerequisites
 

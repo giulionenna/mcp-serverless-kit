@@ -46,6 +46,25 @@ def discover_authorization_server(issuer):
             raise
     return get_json(issuer.rstrip('/') + '/.well-known/openid-configuration'), True
 
+def discover_protected_resource(endpoint, challenge):
+    import re
+    match = re.search(r'resource_metadata="([^"]+)"', challenge)
+    if match:
+        return get_json(match.group(1)), 'challenge'
+    # MCP 2025-11-25 requires clients to try these well-known locations when
+    # no resource_metadata challenge is available. Lambda Function URLs remap
+    # WWW-Authenticate; do not depend on their vendor-specific renamed header.
+    parsed = urlsplit(endpoint)
+    base = parsed.scheme + '://' + parsed.netloc + '/.well-known/oauth-protected-resource'
+    candidates = list(dict.fromkeys([base + parsed.path.rstrip('/'), base]))
+    for i, url in enumerate(candidates):
+        try:
+            return get_json(url), 'well-known'
+        except urllib.error.HTTPError as error:
+            if error.code != 404 or i == len(candidates) - 1:
+                raise
+    raise CheckFailure('Protected resource metadata discovery failed.')
+
 def run(outputs):
     endpoint = outputs['mcp_url']['value']
     issuer = outputs['oauth_issuer']['value']
@@ -59,11 +78,7 @@ def run(outputs):
         if error.code != 401:
             raise CheckFailure('Expected unauthenticated 401, received HTTP ' + str(error.code))
         challenge = error.headers.get('WWW-Authenticate', '')
-    import re
-    match = re.search(r'resource_metadata="([^"]+)"', challenge)
-    if not match:
-        raise CheckFailure('401 response has no resource_metadata challenge.')
-    prm = get_json(match.group(1))
+    prm, discovery_method = discover_protected_resource(endpoint, challenge)
     failures = []
     custom_scopes = set(scopes) - {'openid', 'email', 'profile', 'phone'}
     if custom_scopes - set(prm.get('scopes_supported', [])):
@@ -90,6 +105,7 @@ def run(outputs):
         for failure in failures:
             print('FAIL: ' + failure)
         return 1
+    print('Protected resource discovery: ' + discovery_method + '.')
     print('Discovery checks passed. Browser authorization, token refresh and tools/call still require a live client test.')
     return 0
 

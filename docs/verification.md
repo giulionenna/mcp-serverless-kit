@@ -13,7 +13,7 @@ This development preview distinguishes local tests from a deployed service and c
 | Terraform provider schema validation | Original revision passed GitHub CI; adapter revision must pass CI before deployment |
 | Actual AWS apply / update / destroy | Original apply completed in eu-south-1; adapter update and destroy pending |
 | Live Gateway JWT rejection / metadata / authenticated tool calls | Original unauthenticated rejection and resource metadata passed; authenticated calls pending |
-| AWS-only OAuth adapter | Unit-tested; live deployment/discovery and browser OAuth pending |
+| AWS-only OAuth adapter | Applied in eu-south-1; live OAuth/PRM metadata returned 200 and missing-token request returned 401; final corrected preflight and browser OAuth pending |
 | Cognito browser authorization, PKCE and refresh | Pending |
 | ChatGPT / Claude real connection | Pending |
 | Real Garmin account read | Pending |
@@ -32,8 +32,20 @@ results for the adapter must be checked in its `Validate` workflow.
 - Its final metadata preflight failed because the actual Cognito OIDC document
   did not advertise PKCE S256. Infrastructure was not rolled back.
 - No owner login, token refresh, authenticated tool call or ChatGPT/Claude
-  connection has been verified. The adapter revision still requires bootstrap
-  permission update, deployment and live verification.
+  connection had been verified at that point. Adapter deployment evidence is
+  recorded below; authenticated client verification remains pending.
+
+## Live evidence: OAuth adapter, 2026-10-09
+
+- [CI 37923570905](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/37923570905) passed 65 tests, build, formatting and Terraform provider validation.
+- [Apply 37928295081](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/37928295081) completed: 6 resources added, 3 changed, 0 destroyed. Cognito refresh rotation and Gateway public audience binding were updated.
+- Public OAuth and protected-resource metadata returned 200; metadata advertised
+  S256, static public clients and the tools scope. Missing-token MCP POST returned 401.
+- Function URLs remapped `WWW-Authenticate`; the first preflight incorrectly
+  required that header. The corrected preflight implements MCP's standard
+  well-known metadata discovery without relaxing token rejection or PKCE checks.
+- Browser login, code redemption, refresh, authenticated tools and client
+  acceptance remain unverified. No additional bootstrap permissions are needed.
 
 ## GitHub CI gate
 
@@ -45,7 +57,7 @@ If provider initialization fails a checksum verification, investigate the lock a
 
 The apply workflow reads Terraform outputs into an ignored local file, publishes only allowlisted nonsensitive connection identifiers, and runs `scripts/preflight.py`. The preflight checks:
 
-- An unauthenticated MCP initialize request gets 401 with OAuth resource metadata.
+- An unauthenticated MCP initialize request gets 401, and OAuth resource metadata is discoverable through its challenge or standard well-known path.
 - Public protected-resource metadata advertises the configured OAuth server and resource identifier.
 - RFC 8414 OAuth metadata (preferred) or OIDC discovery contains secure endpoints and `code_challenge_methods_supported` with `S256`.
 - Requested scopes and public-client token authentication are advertised.

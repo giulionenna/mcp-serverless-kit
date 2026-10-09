@@ -31,6 +31,45 @@ def test_oauth_discovery_prioritizes_rfc8414_and_does_not_require_oidc_keys(monk
     assert result == metadata and not is_oidc
     assert not preflight.assess_oidc(result, ['mcp/tools'], require_jwks=is_oidc)
 
+def test_protected_resource_discovery_uses_standard_fallback_without_challenge(monkeypatch):
+    preflight = load('preflight')
+    calls = []
+    metadata = {'resource': 'https://mcp.example/mcp', 'authorization_servers': ['https://auth.example']}
+    def get_json(url):
+        calls.append(url)
+        return metadata
+    monkeypatch.setattr(preflight, 'get_json', get_json)
+    result, method = preflight.discover_protected_resource('https://mcp.example/mcp', '')
+    assert result == metadata and method == 'well-known'
+    assert calls == ['https://mcp.example/.well-known/oauth-protected-resource/mcp']
+
+def test_protected_resource_discovery_prefers_challenge(monkeypatch):
+    preflight = load('preflight')
+    calls = []
+    monkeypatch.setattr(preflight, 'get_json', lambda url: calls.append(url) or {'resource': 'https://mcp.example/mcp'})
+    _, method = preflight.discover_protected_resource('https://mcp.example/mcp', 'Bearer resource_metadata="https://mcp.example/metadata"')
+    assert method == 'challenge'
+    assert calls == ['https://mcp.example/metadata']
+
+@pytest.mark.parametrize('status, expected_calls', [(404, 2), (401, 1), (500, 1)])
+def test_protected_resource_discovery_falls_back_to_root_only_on_missing_path(status, expected_calls, monkeypatch):
+    preflight = load('preflight')
+    calls = []
+    def get_json(url):
+        calls.append(url)
+        if len(calls) == 1:
+            raise preflight.urllib.error.HTTPError(url, status, 'Test', {}, None)
+        return {'resource': 'https://mcp.example/mcp'}
+    monkeypatch.setattr(preflight, 'get_json', get_json)
+    if status == 404:
+        _, method = preflight.discover_protected_resource('https://mcp.example/mcp', '')
+        assert method == 'well-known'
+        assert calls[-1] == 'https://mcp.example/.well-known/oauth-protected-resource'
+    else:
+        with pytest.raises(preflight.urllib.error.HTTPError):
+            preflight.discover_protected_resource('https://mcp.example/mcp', '')
+    assert len(calls) == expected_calls
+
 def test_setup_rejects_placeholders_before_aws_access():
     config = {'AWS_REGION':'eu-west-1','STATE_BUCKET':'personal-mcp-123456789012-eu-west-1-tfstate','DEPLOY_ROLE':'arn:aws:iam::123456789012:role/personal-mcp-github-deploy','TF_VAR_project_name':'personal-mcp','TF_VAR_callback_urls':'["https://chatgpt.com/connector/oauth/{callback_id}"]'}
     with pytest.raises(ValueError):

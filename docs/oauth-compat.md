@@ -11,6 +11,11 @@ sign, store, decode, or validate tokens, and it does not collect passwords.
 
 1. Missing bearer credentials on public `/mcp` receive 401 with a challenge
    pointing to `/.well-known/oauth-protected-resource` on the same origin.
+   In the live deployment, Function URLs remap `WWW-Authenticate` to
+   `x-amzn-Remapped-www-authenticate`. Clients must use the standard well-known
+   fallback: `/.well-known/oauth-protected-resource/mcp`, then the root variant.
+   Both are served. MCP 2025-11-25 explicitly supports discovery using either
+   the challenge or well-known URI, and requires clients to support both.
 2. Resource metadata identifies public `/mcp` as the resource and the Function
    URL origin as the OAuth authorization-server identifier.
 3. RFC 8414 metadata at `/.well-known/oauth-authorization-server` advertises
@@ -79,6 +84,7 @@ Do not describe ChatGPT compatibility as tested until those pass.
 Sources:
 
 - [OpenAI MCP authentication](https://developers.openai.com/plugins/build/auth)
+- [MCP protected-resource discovery](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization#protected-resource-metadata-discovery-requirements)
 - [Cognito PKCE](https://docs.aws.amazon.com/cognito/latest/developerguide/using-pkce-in-authorization-code.html)
 - [Cognito resource binding](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html)
 - [Cognito refresh rotation](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-refresh-token.html)
