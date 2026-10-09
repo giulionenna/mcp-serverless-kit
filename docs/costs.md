@@ -14,6 +14,12 @@ The template does not deploy a continuously running compute instance. At very lo
 
 ## What Terraform creates
 
+The OAuth compatibility adapter adds one 128 MiB Lambda invocation per discovery
+or MCP HTTP request, a cached private S3 configuration read and seven-day logs.
+Function URLs have no separate endpoint fee. Missing/invalid-token requests still
+invoke the adapter, so costs depend on public traffic as well as tool usage.
+[AWS Function URL billing](https://docs.aws.amazon.com/lambda/latest/dg/furls-http-invoke-decision.html).
+
 When Garmin is enabled, Terraform additionally creates a Secrets Manager secret; the secret has a seven-day recovery window on deletion. The schema bucket is encrypted and private, but it is an S3 schema bucket, not a Terraform state backend. The optional bootstrap CloudFormation stack creates a separate encrypted, private, versioned state bucket and a GitHub OIDC deployment role; configure Terraform with that bucket to use remote state. S3 storage and requests for state incur their own usage charges.
 
 There is no cost total here because the eventual amount depends on region, Cognito plan and users, Gateway and Lambda calls, execution time, CloudWatch usage, optional Garmin secret reads, and network transfer. Use the AWS Pricing Calculator with your expected usage to estimate a deployment. [AWS Pricing Calculator](https://calculator.aws/)

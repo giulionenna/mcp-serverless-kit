@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from pathlib import Path
-KEYS = ['mcp_url', 'oauth_client_id', 'oauth_scope', 'oauth_issuer', 'oauth_authorization_url', 'oauth_token_url', 'user_pool_id', 'garmin_secret_arn']
+KEYS = ['mcp_url', 'gateway_url', 'oauth_client_id', 'oauth_scope', 'oauth_issuer', 'token_issuer', 'oauth_authorization_url', 'oauth_token_url', 'user_pool_id', 'garmin_secret_arn']
 def render(outputs):
     lines = ['## MCP connection details', '', 'Create the owner login in AWS CloudShell. See docs/setup.md.', '']
     for key in KEYS:

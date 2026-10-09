@@ -12,7 +12,7 @@ ACCOUNT = '138410486348'
 REGION = 'eu-south-1'
 DIRECTORY = f'arn:aws:bedrock-agentcore:{REGION}:{ACCOUNT}:workload-identity-directory/default'
 IDENTITY = DIRECTORY + '/workload-identity/service-generated-gateway-identity'
-VALUES = {'AWS::Partition': 'aws', 'AWS::AccountId': ACCOUNT, 'AWS::Region': REGION}
+VALUES = {'AWS::Partition': 'aws', 'AWS::AccountId': ACCOUNT, 'AWS::Region': REGION, 'ProjectName': 'personal-mcp'}
 
 
 class CloudFormationLoader(yaml.SafeLoader):
@@ -83,3 +83,12 @@ def test_gateway_synchronization_dependency_is_region_scoped():
     assert matches(action, resource)
     assert not matches(action, resource.replace(ACCOUNT, '999999999999'))
     assert not matches(action, resource.replace(REGION, 'eu-north-1'), 'eu-north-1')
+
+
+@pytest.mark.parametrize('action', ['CreateFunctionUrlConfig', 'GetFunctionUrlConfig', 'UpdateFunctionUrlConfig', 'DeleteFunctionUrlConfig', 'AddPermission', 'RemovePermission'])
+def test_url_permissions_are_limited_to_adapter(action):
+    arn = f'arn:aws:lambda:{REGION}:{ACCOUNT}:function:personal-mcp-oauth-compat'
+    assert matches('lambda:' + action, arn)
+    assert not matches('lambda:' + action, arn.replace('-oauth-compat', '-example'))
+    assert not matches('lambda:' + action, arn.replace(ACCOUNT, '999999999999'))
+    assert not matches('lambda:' + action, arn.replace(REGION, 'eu-north-1'), 'eu-north-1')

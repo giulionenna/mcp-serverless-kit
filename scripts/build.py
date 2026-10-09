@@ -111,7 +111,19 @@ def main():
         for name in names:
             if not args.validate_only:
                 print(package(name, args.output, args.wheelhouse))
+        if not args.validate_only:
+            print(package_oauth_compat(args.output))
     except (ValueError, KeyError, OSError, subprocess.CalledProcessError, SchemaError) as error:
         parser.exit(1, 'Build failed: ' + str(error) + '\n')
+def package_oauth_compat(destination):
+    destination.mkdir(parents=True, exist_ok=True)
+    output = destination / 'oauth-compat.zip'
+    with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        info = zipfile.ZipInfo('oauth_compat.py', (1980, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        archive.writestr(info, (ROOT / 'runtime/oauth_compat.py').read_bytes(), compresslevel=9)
+    return output
+
 if __name__ == '__main__':
     main()

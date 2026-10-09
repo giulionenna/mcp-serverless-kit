@@ -2,6 +2,13 @@
 
 Research date: 2026-10-08. This is a docs-based assessment, not a test result; neither ChatGPT nor Claude compatibility has been tested. Compatibility remains conditional on live preflight checks below. A known OAuth metadata gap may block MCP clients even though Cognito supports PKCE at its authorization endpoint.
 
+Update 2026-10-09: the original AWS deployment completed and live Cognito
+discovery confirmed the missing S256 field. The current implementation adds an
+[AWS-only OAuth adapter](oauth-compat.md), with a separate OAuth metadata server
+identifier and Cognito JWT token issuer. The native-discovery discussion below
+describes the original direct-Gateway path. Adapter/client compatibility remains
+subject to the [live verification gates](verification.md).
+
 ## Findings
 
 - **Cognito can serve as the OAuth/OIDC authorization server; AgentCore Gateway is the protected resource.** Configure the gateway's JWT authorizer with Cognito's OIDC discovery document, normally `https://cognito-idp.<region>.amazonaws.com/<user-pool-id>/.well-known/openid-configuration`. That is distinct from the gateway's OAuth Protected Resource Metadata (PRM) document at `https://<gateway-host>/.well-known/oauth-protected-resource`. AgentCore returns the PRM URL in `WWW-Authenticate`; clients use PRM to discover the authorization server and scopes, then query Cognito discovery for its authorize/token endpoints. AWS documents both layers and scope challenges. [AWS inbound authorization](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-inbound-auth.html) [Cognito endpoints](https://docs.aws.amazon.com/cognito/latest/developerguide/federation-endpoints.html)

@@ -1,6 +1,6 @@
 # Browser-only setup
 
-Use this from a fork in your own GitHub account and your own AWS account. No code needs to run on your computer. The current preview has not yet been deployed or connected to ChatGPT/Claude; follow the verification gates below rather than assuming success.
+Use this from a fork in your own GitHub account and your own AWS account. No code needs to run on your computer. The original infrastructure was deployed in `eu-south-1`; the AWS-only OAuth adapter and ChatGPT/Claude connections still require live verification. Follow the verification gates below rather than assuming success.
 
 ## Prerequisites
 
@@ -61,6 +61,16 @@ After the update completes, rerun the failed `apply` so Terraform resumes from
 its saved state. The pinned provider retains and taints a Gateway that fails
 during creation, allowing Terraform to remove it before retrying.
 
+The OAuth compatibility revision requires Function URL configuration and Lambda
+permission-management actions, limited to `${ProjectName}-oauth-compat` in this
+account/region. Existing installations must update the bootstrap before deploying
+the adapter. For the personal deployment in Milano:
+
+```bash
+git pull --ff-only
+python3 scripts/bootstrap.py --region eu-south-1 --update
+```
+
 ## 3. Set GitHub repository variables
 
 Open **Settings → Secrets and variables → Actions → Variables** in your fork.
@@ -86,7 +96,7 @@ Deployment is manual: a fork or ordinary push does not create AWS charges. Both 
 
 The apply summary lists the endpoint, client ID, scope, user pool ID, and authorization/token endpoints. Those are public connection identifiers; no token or password is printed.
 
-The final preflight reads live metadata. If it fails, resources may already exist: **a failed preflight does not roll back Terraform apply**. Inspect the failure, resolve it, or run `destroy` while investigating. If Cognito omits PKCE `S256` discovery metadata, do not disable authentication to get around the problem. A different authorization-server configuration or a tested compatibility layer is required; this preview does not ship such a layer.
+The final preflight reads live metadata. If it fails, resources may already exist: **a failed preflight does not roll back Terraform apply**. Inspect the failure, resolve it, or run `destroy` while investigating. Do not disable Gateway authentication to get around discovery problems. This revision publishes OAuth metadata through a public Lambda Function URL. Use `mcp_url`, not raw `gateway_url`, when connecting clients. See [adapter behavior and limits](oauth-compat.md).
 
 ## 5. Create your owner
 

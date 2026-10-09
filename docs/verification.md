@@ -10,14 +10,30 @@ This development preview distinguishes local tests from a deployed service and c
 | Example package reproducibility | Tested with fixed ZIP entries and the same wheel inputs |
 | Garmin ZIP build and dependency imports | Tested on Python 3.12 Linux x86_64 |
 | Terraform formatting | Passed |
-| Terraform provider schema validation | Pending; local provider cache is unreliable and provider startup is restricted |
-| Actual AWS apply / update / destroy | Pending |
-| Live Gateway JWT rejection / metadata / authenticated tool calls | Pending |
+| Terraform provider schema validation | Original revision passed GitHub CI; adapter revision must pass CI before deployment |
+| Actual AWS apply / update / destroy | Original apply completed in eu-south-1; adapter update and destroy pending |
+| Live Gateway JWT rejection / metadata / authenticated tool calls | Original unauthenticated rejection and resource metadata passed; authenticated calls pending |
+| AWS-only OAuth adapter | Unit-tested; live deployment/discovery and browser OAuth pending |
 | Cognito browser authorization, PKCE and refresh | Pending |
 | ChatGPT / Claude real connection | Pending |
 | Real Garmin account read | Pending |
 
-Local suite: **30 tests passed** as of the initial implementation on 2026-10-08. No live AWS or Garmin credentials were used.
+The original 39-test revision passed GitHub CI on 2026-10-09. Adapter regression
+coverage adds public OAuth discovery, trusted origin, request forwarding,
+challenge rewriting, body limits, safe exceptions, upstream host restrictions,
+deterministic packaging and scoped Function URL deployment permissions. Automated
+results for the adapter must be checked in its `Validate` workflow.
+
+## Live evidence: original deployment, 2026-10-09
+
+- Region: `eu-south-1`; Terraform 1.13.4, AWS provider 6.54.0.
+- Original [CI run 37917097645](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/37917097645) passed all 39 tests, build, formatting and provider validation.
+- [Apply run 37917455561](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/37917455561), job 113777014801, completed Terraform apply, creating the Gateway and example target.
+- Its final metadata preflight failed because the actual Cognito OIDC document
+  did not advertise PKCE S256. Infrastructure was not rolled back.
+- No owner login, token refresh, authenticated tool call or ChatGPT/Claude
+  connection has been verified. The adapter revision still requires bootstrap
+  permission update, deployment and live verification.
 
 ## GitHub CI gate
 
@@ -30,9 +46,11 @@ If provider initialization fails a checksum verification, investigate the lock a
 The apply workflow reads Terraform outputs into an ignored local file, publishes only allowlisted nonsensitive connection identifiers, and runs `scripts/preflight.py`. The preflight checks:
 
 - An unauthenticated MCP initialize request gets 401 with OAuth resource metadata.
-- Gateway protected-resource metadata advertises the configured issuer and resource identifier.
-- OIDC discovery contains secure endpoints and `code_challenge_methods_supported` with `S256`.
-- Advertised OIDC scopes are enabled for this app client.
+- Public protected-resource metadata advertises the configured OAuth server and resource identifier.
+- RFC 8414 OAuth metadata (preferred) or OIDC discovery contains secure endpoints and `code_challenge_methods_supported` with `S256`.
+- Requested scopes and public-client token authentication are advertised.
+- Adapter authorization/token endpoints match the actual configured Cognito endpoints.
+- The separate Cognito token issuer and public-key endpoint are consistent.
 
 A failed preflight leaves applied resources in place. It does not imply Terraform rolled back. Diagnose or destroy them. Cognito may support PKCE while omitting the discovery field; this is a real interoperability gate, not a reason to skip authentication.
 
@@ -46,7 +64,7 @@ For each intended client, verify:
 4. `tools/list` includes `example___echo` and `example___add`.
 5. `tools/call` returns the requested echo and a correct sum.
 6. Token refresh works after access-token expiry.
-7. Missing/expired/wrong-client/wrong-scope tokens are rejected.
+7. Missing/expired/wrong-client/wrong-scope/wrong-audience tokens are rejected.
 8. If Garmin is enabled, a real readonly call succeeds and token renewal persists.
 9. Updating a schema and disabling a module produces the expected deployed changes.
 10. Destroy completes and expected retained resources are identified.

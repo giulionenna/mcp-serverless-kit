@@ -69,9 +69,14 @@ resource "aws_cognito_user_pool_client" "mcp" {
   supported_identity_providers         = ["COGNITO"]
   prevent_user_existence_errors        = "ENABLED"
   enable_token_revocation              = true
-  access_token_validity                = 60
-  id_token_validity                    = 60
-  refresh_token_validity               = var.refresh_token_days
+  explicit_auth_flows                  = ["ALLOW_USER_SRP_AUTH"]
+  refresh_token_rotation {
+    feature                    = "ENABLED"
+    retry_grace_period_seconds = 0
+  }
+  access_token_validity  = 60
+  id_token_validity      = 60
+  refresh_token_validity = var.refresh_token_days
   token_validity_units {
     access_token  = "minutes"
     id_token      = "minutes"
@@ -142,9 +147,10 @@ resource "aws_bedrockagentcore_gateway" "mcp" {
   protocol_type   = "MCP"
   authorizer_configuration {
     custom_jwt_authorizer {
-      discovery_url   = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}/.well-known/openid-configuration"
-      allowed_clients = [aws_cognito_user_pool_client.mcp.id]
-      allowed_scopes  = [local.scope]
+      discovery_url    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}/.well-known/openid-configuration"
+      allowed_clients  = [aws_cognito_user_pool_client.mcp.id]
+      allowed_scopes   = [local.scope]
+      allowed_audience = ["${trimsuffix(aws_lambda_function_url.oauth_compat.function_url, "/")}/mcp"]
     }
   }
   depends_on = [aws_iam_role_policy.gateway, aws_cognito_user_pool_domain.mcp]

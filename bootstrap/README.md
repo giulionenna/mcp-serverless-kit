@@ -8,4 +8,10 @@ Review the role policy: it is a practical deployment starter, not a strong isola
 
 State persists when the bootstrap stack is deleted. Delete retained state only after destroying kit infrastructure and verifying no state is needed. Garmin secret values are populated separately and are never read by the deployment role or Terraform.
 
+The AWS-only OAuth adapter needs Function URL create/read/update/delete and Lambda
+permission create/remove operations. These are restricted to the single
+`${ProjectName}-oauth-compat` function in this account/region. Public discovery
+is intentional; Gateway still validates every tool request's JWT. Existing
+installations must update this stack before applying the adapter revision.
+
 Gateway lifecycle operations create and manage a workload identity on the caller's behalf. The deployment role includes `CreateWorkloadIdentity`, `GetWorkloadIdentity`, `UpdateWorkloadIdentity`, and `DeleteWorkloadIdentity` on both the default directory ARN and its child identity ARNs in this account and region. AWS requires both resource types. The service assigns identity names, so this statement is not project-prefix scoped. `SynchronizeGatewayTargets` is scoped to gateways in this account and region and is a dependency of Gateway/target creation and target updates. The policy grants no workload access tokens or credential-provider operations. See [AWS service authorization](https://docs.aws.amazon.com/service-authorization/latest/reference/list_bedrock-agentcore.html).

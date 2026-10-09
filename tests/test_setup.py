@@ -18,6 +18,19 @@ def test_live_discovery_requires_pkce_and_enabled_scopes():
     metadata['code_challenge_methods_supported'] = ['S256']
     assert not preflight.assess_oidc(metadata, ['openid','profile'])
 
+def test_oauth_discovery_prioritizes_rfc8414_and_does_not_require_oidc_keys(monkeypatch):
+    preflight = load('preflight')
+    calls = []
+    metadata = {'issuer': 'https://auth.example', 'authorization_endpoint': 'https://cognito.example/authorize', 'token_endpoint': 'https://cognito.example/token', 'code_challenge_methods_supported': ['S256'], 'scopes_supported': ['mcp/tools'], 'grant_types_supported': ['authorization_code', 'refresh_token']}
+    def get_json(url):
+        calls.append(url)
+        return metadata
+    monkeypatch.setattr(preflight, 'get_json', get_json)
+    result, is_oidc = preflight.discover_authorization_server('https://auth.example')
+    assert calls == ['https://auth.example/.well-known/oauth-authorization-server']
+    assert result == metadata and not is_oidc
+    assert not preflight.assess_oidc(result, ['mcp/tools'], require_jwks=is_oidc)
+
 def test_setup_rejects_placeholders_before_aws_access():
     config = {'AWS_REGION':'eu-west-1','STATE_BUCKET':'personal-mcp-123456789012-eu-west-1-tfstate','DEPLOY_ROLE':'arn:aws:iam::123456789012:role/personal-mcp-github-deploy','TF_VAR_project_name':'personal-mcp','TF_VAR_callback_urls':'["https://chatgpt.com/connector/oauth/{callback_id}"]'}
     with pytest.raises(ValueError):

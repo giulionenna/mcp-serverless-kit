@@ -18,11 +18,11 @@ def get_json(url):
             raise CheckFailure('Discovery redirected to an insecure endpoint.')
         return json.load(response)
 
-def assess_oidc(metadata, configured_scopes):
+def assess_oidc(metadata, configured_scopes, require_jwks=True):
     failures = []
     if 'S256' not in metadata.get('code_challenge_methods_supported', []):
         failures.append('Authorization server does not advertise PKCE S256. Cognito may omit this metadata field; client integration is blocked until tested/resolved.')
-    for key in ['issuer','authorization_endpoint','token_endpoint','jwks_uri']:
+    for key in ['issuer','authorization_endpoint','token_endpoint'] + (['jwks_uri'] if require_jwks else []):
         if not isinstance(metadata.get(key), str) or not metadata[key].startswith('https://'):
             failures.append('Missing or insecure OIDC field: ' + key)
     advertised = set(metadata.get('scopes_supported', [])) & {'openid', 'email', 'profile', 'phone'}
@@ -30,7 +30,21 @@ def assess_oidc(metadata, configured_scopes):
         failures.append('OIDC scopes advertised but not enabled for the app client: ' + ', '.join(sorted(advertised - set(configured_scopes))))
     if 'authorization_code' not in metadata.get('grant_types_supported', ['authorization_code']):
         failures.append('Authorization-code grant not advertised.')
+    if set(configured_scopes) - set(metadata.get('scopes_supported', [])):
+        failures.append('Authorization server does not advertise all configured scopes.')
     return failures
+
+def discover_authorization_server(issuer):
+    parsed = urlsplit(issuer)
+    # RFC 8414 first, then OIDC discovery; do not silently replace successful
+    # but incompatible metadata with a different document.
+    oauth_url = parsed.scheme + '://' + parsed.netloc + '/.well-known/oauth-authorization-server' + parsed.path.rstrip('/')
+    try:
+        return get_json(oauth_url), False
+    except urllib.error.HTTPError as error:
+        if error.code not in (400, 404):
+            raise
+    return get_json(issuer.rstrip('/') + '/.well-known/openid-configuration'), True
 
 def run(outputs):
     endpoint = outputs['mcp_url']['value']
@@ -53,15 +67,25 @@ def run(outputs):
     failures = []
     custom_scopes = set(scopes) - {'openid', 'email', 'profile', 'phone'}
     if custom_scopes - set(prm.get('scopes_supported', [])):
-        failures.append('Gateway protected-resource metadata does not advertise the required tools scope.')
+        failures.append('Protected-resource metadata does not advertise the required tools scope.')
     if issuer not in prm.get('authorization_servers', []):
-        failures.append('Gateway protected-resource metadata does not advertise the configured Cognito issuer.')
+        failures.append('Protected-resource metadata does not advertise the configured OAuth authorization server.')
     if prm.get('resource') != endpoint:
-        failures.append('Gateway protected-resource resource identifier differs from the MCP URL; verify client resource binding.')
-    metadata = get_json(issuer.rstrip('/') + '/.well-known/openid-configuration')
+        failures.append('Protected-resource resource identifier differs from the MCP URL; verify client resource binding.')
+    metadata, is_oidc = discover_authorization_server(issuer)
     if metadata.get('issuer') != issuer:
         failures.append('Authorization server issuer mismatch.')
-    failures.extend(assess_oidc(metadata, scopes))
+    failures.extend(assess_oidc(metadata, scopes, require_jwks=is_oidc))
+    if 'none' not in metadata.get('token_endpoint_auth_methods_supported', []):
+        failures.append('Static public client authentication method none is not advertised.')
+    for key, output in [('authorization_endpoint', 'oauth_authorization_url'), ('token_endpoint', 'oauth_token_url')]:
+        if output in outputs and metadata.get(key) != outputs[output]['value']:
+            failures.append('OAuth adapter advertises an unexpected Cognito endpoint: ' + key)
+    if 'token_issuer' in outputs:
+        token_issuer = outputs['token_issuer']['value']
+        token_metadata = get_json(token_issuer.rstrip('/') + '/.well-known/openid-configuration')
+        if token_metadata.get('issuer') != token_issuer or not token_metadata.get('jwks_uri', '').startswith(token_issuer + '/'):
+            failures.append('Cognito token issuer or public key endpoint mismatch.')
     if failures:
         for failure in failures:
             print('FAIL: ' + failure)

@@ -2,13 +2,14 @@
 
 Deploy a modular personal MCP endpoint on AWS using **Amazon Bedrock AgentCore Gateway and AWS Lambda**. Fork the repository, enable modules, and deploy from GitHub Actions using short-lived AWS credentials.
 
-**Status: development preview.** The Python modules and packaging have local tests. AWS deployment, Terraform provider validation, and browser OAuth flows with ChatGPT/Claude still need live verification. In particular, Cognito discovery may omit the PKCE metadata some clients require. The included preflight detects that problem; an AWS endpoint alone is not evidence of client compatibility.
+**Status: development preview.** The original Gateway, example Lambda and Cognito deployment completed in `eu-south-1` on 2026-10-09. Live preflight confirmed unauthenticated rejection and exposed missing PKCE metadata in Cognito discovery. This revision adds an AWS-only OAuth discovery/transport adapter; its deployment and browser OAuth flows with ChatGPT/Claude still require verification. An endpoint alone is not evidence of client compatibility. See [verification](docs/verification.md).
 
 ## What you get
 
 - One JWT-authenticated AgentCore Gateway exposing the enabled tools through MCP.
 - One Python 3.12 Lambda per module; no always-running application server.
 - Cognito authorization-code login, an admin-created owner, and exact callback allowlists.
+- A Lambda Function URL for OAuth metadata and stateless JSON MCP transport, retaining Cognito token issuance and Gateway JWT validation.
 - Terraform infrastructure, a private S3 state bootstrap, and GitHub Actions OIDC deployment.
 - An accountless `example` module and an optional read-only `garmin` module.
 - Dependency hashes, schema validation, OAuth discovery checks, and a destroy workflow.
@@ -18,7 +19,8 @@ This kit exposes **MCP tools**. AgentCore translates tool calls into Lambda invo
 ```mermaid
 flowchart TD
     Client["MCP client"] -->|"Browser login"| Cognito["Cognito"]
-    Client -->|"MCP + access token"| Gateway["AgentCore Gateway"]
+    Client -->|"Discovery + MCP"| Adapter["OAuth compatibility Lambda"]
+    Adapter -->|"Unmodified access token"| Gateway["AgentCore Gateway"]
     Gateway --> Example["Example Lambda"]
     Gateway --> Garmin["Optional Garmin Lambda"]
     Garmin --> Secret["Private token secret"]
@@ -62,7 +64,7 @@ This is a **single-owner deployment**: authorized users see the same enabled too
 ## Verification and removal
 
 ```bash
-python -m pip install pytest==8.3.5 jsonschema==4.23.0
+python -m pip install pytest==8.3.5 jsonschema==4.23.0 PyYAML==6.0.2
 python -m pytest -q
 python scripts/build.py
 terraform -chdir=infra init -backend=false -lockfile=readonly
