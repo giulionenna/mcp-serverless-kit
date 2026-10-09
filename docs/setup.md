@@ -49,7 +49,12 @@ first live deployment found that the pinned provider also reads
 `cognito-idp:GetUserPoolMfaConfig`; this permission is included in the bootstrap.
 Gateway creation also creates an AgentCore workload identity on the caller's
 behalf. The bootstrap includes its create/read/update/delete lifecycle actions,
-limited to the default workload identity directory in this account and region.
+limited to the default workload identity directory and its child identities in
+this account and region. AWS evaluates these actions against both resource
+types; a policy covering only child identities fails. Gateway target
+synchronization is also permitted for gateways in this account and region,
+as required by the Gateway create/target create/target update APIs. See the
+[AWS service authorization reference](https://docs.aws.amazon.com/service-authorization/latest/reference/list_bedrock-agentcore.html).
 It grants no workload-token or credential-provider access. See
 [AWS Gateway permissions](https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway-prerequisites-permissions.html).
 After the update completes, rerun the failed `apply` so Terraform resumes from

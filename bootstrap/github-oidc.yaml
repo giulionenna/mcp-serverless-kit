@@ -123,7 +123,16 @@ Resources:
               - Sid: GatewayWorkloadIdentityLifecycle
                 Effect: Allow
                 Action: ['bedrock-agentcore:CreateWorkloadIdentity', 'bedrock-agentcore:GetWorkloadIdentity', 'bedrock-agentcore:UpdateWorkloadIdentity', 'bedrock-agentcore:DeleteWorkloadIdentity']
-                Resource: !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*'
+                # AWS authorizes these actions against BOTH resource types.
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default'
+                  - !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:workload-identity-directory/default/workload-identity/*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+              # Required by CreateGateway/CreateGatewayTarget/UpdateGatewayTarget.
+              - Sid: GatewaySynchronization
+                Effect: Allow
+                Action: 'bedrock-agentcore:SynchronizeGatewayTargets'
+                Resource: !Sub 'arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
 Outputs:
   DeploymentRoleArn: {Value: !GetAtt DeploymentRole.Arn}
