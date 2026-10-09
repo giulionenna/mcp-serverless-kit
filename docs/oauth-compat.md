@@ -5,7 +5,10 @@ The original deployment reached a live Cognito discovery document that omitted
 OAuth guide rejects metadata that does not advertise it.
 
 This adapter is a Lambda Function URL in the same AWS region. It does not issue,
-sign, store, decode, or validate tokens, and it does not collect passwords.
+sign, store or validate tokens, and it does not collect passwords. Only after
+Gateway rejects a request with 401/403 does it decode the unverified JWT payload
+to record boolean comparisons against the configured issuer, client, audience
+and scope. These comparisons never grant access, and claim values are not logged.
 
 ## Request flow
 
@@ -70,6 +73,11 @@ session validity window; sign in again after that window expires.
   hostnames. Bodies, tokens and exception strings are never logged by adapter code.
 - CloudWatch diagnostics contain only known method/version categories, upstream
   HTTP status, numeric JSON-RPC error code, tool count and fixed failure category.
+  Rejected tokens add `mcp_rejected_token_checks`: parse success, a fixed token-kind
+  category, booleans for expected issuer/client/audience/scope and whether Gateway
+  sent an `insufficient_scope` challenge. These are diagnostic comparisons of
+  unverified claims; Gateway remains the authorization authority. No token,
+  subject, email, raw scope/audience value or request/response body is logged.
   After reproducing a connection failure, inspect them with:
 
   ```sh

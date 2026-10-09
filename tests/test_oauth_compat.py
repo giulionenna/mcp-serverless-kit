@@ -19,6 +19,8 @@ def settings(monkeypatch):
     monkeypatch.setenv('AWS_REGION', 'eu-south-1')
     monkeypatch.setenv('MCP_SCOPE', 'personal-mcp/tools')
     monkeypatch.setenv('COGNITO_OAUTH_ORIGIN', COGNITO)
+    monkeypatch.setenv('COGNITO_TOKEN_ISSUER', 'https://cognito-idp.eu-south-1.amazonaws.com/pool')
+    monkeypatch.setenv('COGNITO_CLIENT_ID', 'expected-client')
 
 
 def event(path='/mcp', method='POST', token=None):
@@ -120,6 +122,59 @@ def test_gateway_remains_auth_authority_and_challenges_are_rewritten(status, mon
     assert result['statusCode'] == status
     assert ORIGIN in result['headers']['WWW-Authenticate']
     assert 'private' not in json.dumps(result)
+
+
+@pytest.mark.parametrize('scope, audience, kind, expected_scope, expected_audience', [
+    ('personal-mcp/tools openid', ORIGIN + '/mcp', 'access', True, True),
+    ('openid email', ORIGIN + '/mcp', 'access', False, True),
+    ('personal-mcp/tools', 'other-resource', 'access', True, False),
+    ('personal-mcp/tools', [ORIGIN + '/mcp'], 'access', True, True),
+    (None, 'expected-client', 'id', False, False),
+    (['personal-mcp/tools'], {'private': 'data'}, 'private-kind', False, False),
+])
+def test_rejected_claim_checks_are_safe_and_never_grant_access(scope, audience, kind, expected_scope, expected_audience, monkeypatch, capsys):
+    claims = {'iss': 'https://cognito-idp.eu-south-1.amazonaws.com/pool', 'client_id': 'expected-client',
+              'scope': scope, 'aud': audience, 'token_use': kind, 'email': 'private@example.test',
+              'sub': 'private-user', 'password': 'private-secret'}
+    payload = base64.urlsafe_b64encode(json.dumps(claims).encode()).decode().rstrip('=')
+    token = 'Bearer header.' + payload + '.signature'
+    class Opener:
+        def open(self, request, timeout):
+            raise urllib.error.HTTPError(request.full_url, 403, 'Denied',
+                                         {'WWW-Authenticate': 'Bearer error="insufficient_scope", scope="private"'}, io.BytesIO(b'private body'))
+    monkeypatch.setattr(compat, 'gateway_url', lambda: 'https://gateway.example/mcp')
+    monkeypatch.setattr(compat.urllib.request, 'build_opener', lambda *args: Opener())
+    assert compat.lambda_handler(event(token=token), None)['statusCode'] == 403
+    logs = capsys.readouterr().out
+    assert 'private' not in logs and payload not in logs and 'expected-client' not in logs
+    check = json.loads(logs.splitlines()[-1])
+    assert check == {'event': 'mcp_rejected_token_checks', 'parsed': True,
+                     'insufficient_scope_challenge': True, 'issuer_matches': True,
+                     'client_matches': True, 'audience_matches': expected_audience,
+                     'scope_present': expected_scope,
+                     'token_kind': kind if kind in ('access', 'id') else 'other'}
+
+
+@pytest.mark.parametrize('token', ['Bearer not-jwt', 'Bearer bad.@@@.signature',
+                                  'Bearer bad.W10.signature', 'Bearer bad.e30.signature'])
+def test_rejected_diagnostics_handle_untrusted_or_missing_claims(token, capsys):
+    compat.rejected_token_diagnostic(token, ORIGIN, {})
+    check = json.loads(capsys.readouterr().out)
+    assert check['insufficient_scope_challenge'] is False
+    if check['parsed']:
+        assert check['token_kind'] == 'other'
+        assert not any(check[key] for key in ('issuer_matches', 'client_matches', 'audience_matches', 'scope_present'))
+
+
+def test_successful_requests_do_not_decode_or_log_claims(monkeypatch, capsys):
+    class Opener:
+        def open(self, request, timeout):
+            return Upstream(b'{"jsonrpc":"2.0","id":1,"result":{"tools":[]}}')
+    monkeypatch.setattr(compat, 'gateway_url', lambda: 'https://gateway.example/mcp')
+    monkeypatch.setattr(compat.urllib.request, 'build_opener', lambda *args: Opener())
+    monkeypatch.setattr(compat, 'rejected_token_diagnostic', lambda *args: pytest.fail('Do not inspect successful tokens'))
+    assert compat.lambda_handler(event(token='Bearer secret.token'), None)['statusCode'] == 200
+    assert 'mcp_rejected_token_checks' not in capsys.readouterr().out
 
 
 @pytest.mark.parametrize('body, status', [('{', 400), ('{"value":NaN}', 400), ('[]', 400), ('x' * (compat.MAX_BODY * 2 + 1), 413)])

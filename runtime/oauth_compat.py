@@ -45,6 +45,40 @@ def request_diagnostic(message, headers):
                version=version if isinstance(version, str) and version in PROTOCOL_VERSIONS else 'other_or_absent')
 
 
+def rejected_token_diagnostic(authorization, public_origin, upstream_headers):
+    # These are UNVERIFIED payload comparisons for diagnosis only. They never
+    # authorize a request or replace Gateway's signature/expiry/claim checks.
+    # Log only booleans and a fixed token-kind category, never claim values.
+    fields = {'parsed': False,
+              'insufficient_scope_challenge': bool(re.search(
+                  r'error\s*=\s*"?insufficient_scope(?:"|\s|,|$)',
+                  upstream_headers.get('WWW-Authenticate', ''), re.IGNORECASE))}
+    try:
+        parts = authorization.split(' ', 1)[1].split('.')
+        if len(parts) != 3:
+            raise ValueError('Not a JWT')
+        payload = parts[1]
+        decoded = base64.b64decode(payload + '=' * (-len(payload) % 4), altchars=b'-_', validate=True)
+        claims = json.loads(decoded)
+        if not isinstance(claims, dict):
+            raise ValueError('Invalid claims')
+        scope = claims.get('scope')
+        audience = claims.get('aud')
+        kind = claims.get('token_use')
+        fields.update({
+            'parsed': True,
+            'token_kind': kind if isinstance(kind, str) and kind in ('access', 'id') else 'other',
+            'issuer_matches': claims.get('iss') == os.environ['COGNITO_TOKEN_ISSUER'],
+            'client_matches': claims.get('client_id') == os.environ['COGNITO_CLIENT_ID'],
+            'audience_matches': (audience == public_origin + '/mcp' or
+                                 isinstance(audience, list) and public_origin + '/mcp' in audience),
+            'scope_present': isinstance(scope, str) and os.environ['MCP_SCOPE'] in scope.split(),
+        })
+    except (ValueError, UnicodeError, IndexError, KeyError, RecursionError):
+        pass
+    diagnostic('mcp_rejected_token_checks', **fields)
+
+
 def response(status, body=None, headers=None):
     return {
         'statusCode': status,
@@ -143,6 +177,7 @@ def forward(event, public_origin, headers):
         status = upstream.status
         diagnostic('mcp_upstream', status=status)
         if status in (401, 403):
+            rejected_token_diagnostic(authorization, public_origin, upstream.headers)
             return response(status, {'error': 'Authentication required' if status == 401 else 'Insufficient permissions'}, challenge(public_origin, status == 403))
         if status >= 500 or 300 <= status < 400:
             return response(502, {'error': 'Gateway unavailable'})

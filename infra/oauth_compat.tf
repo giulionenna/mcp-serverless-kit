@@ -38,6 +38,8 @@ resource "aws_lambda_function" "oauth_compat" {
     variables = {
       MCP_SCOPE            = local.scope
       COGNITO_OAUTH_ORIGIN = "https://${aws_cognito_user_pool_domain.mcp.domain}.auth.${var.aws_region}.amazoncognito.com"
+      COGNITO_TOKEN_ISSUER = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}"
+      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.mcp.id
       CONFIG_BUCKET        = aws_s3_bucket.schemas.id
       CONFIG_KEY           = "connection/gateway.json"
     }
