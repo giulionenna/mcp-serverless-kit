@@ -69,10 +69,10 @@ def rejected_token_diagnostic(authorization, public_origin, upstream_headers):
             'parsed': True,
             'token_kind': kind if isinstance(kind, str) and kind in ('access', 'id') else 'other',
             'issuer_matches': claims.get('iss') == os.environ['COGNITO_TOKEN_ISSUER'],
-            'client_matches': claims.get('client_id') == os.environ['COGNITO_CLIENT_ID'],
+            'client_matches': claims.get('client_id') == gateway_config()['oauth_client_id'],
             'audience_matches': (audience == public_origin + '/mcp' or
                                  isinstance(audience, list) and public_origin + '/mcp' in audience),
-            'scope_present': isinstance(scope, str) and os.environ['MCP_SCOPE'] in scope.split(),
+            'scope_present': isinstance(scope, str) and tools_scope(public_origin) in scope.split(),
         })
     except (ValueError, UnicodeError, IndexError, KeyError, RecursionError):
         pass
@@ -97,8 +97,14 @@ def origin(event):
     return 'https://' + domain
 
 
+def tools_scope(public_origin):
+    # Cognito prefixes custom scopes with their resource-server identifier.
+    # Derive it from the trusted Function URL origin, never a caller header.
+    return public_origin + '/mcp/tools'
+
+
 def challenge(public_origin, insufficient_scope=False):
-    value = 'Bearer resource_metadata="' + public_origin + '/.well-known/oauth-protected-resource", scope="' + os.environ['MCP_SCOPE'] + '"'
+    value = 'Bearer resource_metadata="' + public_origin + '/.well-known/oauth-protected-resource", scope="' + tools_scope(public_origin) + '"'
     if insufficient_scope:
         value += ', error="insufficient_scope"'
     return {'WWW-Authenticate': value}
@@ -116,12 +122,12 @@ def authorization_metadata(public_origin):
         'grant_types_supported': ['authorization_code', 'refresh_token'],
         'token_endpoint_auth_methods_supported': ['none'],
         'code_challenge_methods_supported': ['S256'],
-        'scopes_supported': [os.environ['MCP_SCOPE']],
+        'scopes_supported': [tools_scope(public_origin)],
         'authorization_response_iss_parameter_supported': False,
     }
 
 
-def gateway_url():
+def gateway_config():
     global _gateway_cache
     if _gateway_cache and _gateway_cache[0] > time.monotonic():
         return _gateway_cache[1]
@@ -136,8 +142,15 @@ def gateway_url():
             or parsed.username or parsed.password or parsed.port or parsed.path != '/mcp'
             or parsed.query or parsed.fragment):
         raise ValueError('Invalid Gateway endpoint')
-    _gateway_cache = (time.monotonic() + 60, url)
-    return url
+    client_id = config.get('oauth_client_id')
+    if not isinstance(client_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,128}', client_id):
+        raise ValueError('Invalid client configuration')
+    _gateway_cache = (time.monotonic() + 60, config)
+    return config
+
+
+def gateway_url():
+    return gateway_config()['gateway_url']
 
 
 def forward(event, public_origin, headers):
@@ -202,7 +215,7 @@ def lambda_handler(event, context):
         method = event['requestContext']['http']['method']
         path = event.get('rawPath', '/')
         if method == 'GET' and path in ('/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/mcp'):
-            return response(200, {'resource': public_origin + '/mcp', 'authorization_servers': [public_origin], 'scopes_supported': [os.environ['MCP_SCOPE']], 'bearer_methods_supported': ['header']})
+            return response(200, {'resource': public_origin + '/mcp', 'authorization_servers': [public_origin], 'scopes_supported': [tools_scope(public_origin)], 'bearer_methods_supported': ['header']})
         if method == 'GET' and path == '/.well-known/oauth-authorization-server':
             return response(200, authorization_metadata(public_origin))
         if path != '/mcp':

@@ -10,17 +10,18 @@ ROOT = Path(__file__).parents[1]
 spec = importlib.util.spec_from_file_location('oauth_compat', ROOT / 'runtime/oauth_compat.py')
 compat = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(compat)
+GATEWAY_CONFIG = compat.gateway_config
 ORIGIN = 'https://abcdefgh.lambda-url.eu-south-1.on.aws'
 COGNITO = 'https://personal-mcp.auth.eu-south-1.amazoncognito.com'
 
 
 @pytest.fixture(autouse=True)
 def settings(monkeypatch):
+    compat._gateway_cache = None
     monkeypatch.setenv('AWS_REGION', 'eu-south-1')
-    monkeypatch.setenv('MCP_SCOPE', 'personal-mcp/tools')
     monkeypatch.setenv('COGNITO_OAUTH_ORIGIN', COGNITO)
     monkeypatch.setenv('COGNITO_TOKEN_ISSUER', 'https://cognito-idp.eu-south-1.amazonaws.com/pool')
-    monkeypatch.setenv('COGNITO_CLIENT_ID', 'expected-client')
+    monkeypatch.setattr(compat, 'gateway_config', lambda: {'oauth_client_id': 'expected-client'})
 
 
 def event(path='/mcp', method='POST', token=None):
@@ -42,6 +43,8 @@ def test_discovery_and_challenge_use_trusted_origin(monkeypatch):
     metadata = json.loads(compat.lambda_handler(event('/.well-known/oauth-protected-resource/mcp', 'GET'), None)['body'])
     assert metadata['resource'] == ORIGIN + '/mcp'
     assert metadata['authorization_servers'] == [ORIGIN]
+    assert metadata['scopes_supported'] == [ORIGIN + '/mcp/tools']
+    assert 'scope="' + ORIGIN + '/mcp/tools"' in result['headers']['WWW-Authenticate']
 
 
 def test_metadata_delegates_oauth_without_claiming_oidc():
@@ -51,7 +54,7 @@ def test_metadata_delegates_oauth_without_claiming_oidc():
     assert metadata['token_endpoint'] == COGNITO + '/oauth2/token'
     assert metadata['code_challenge_methods_supported'] == ['S256']
     assert metadata['token_endpoint_auth_methods_supported'] == ['none']
-    assert metadata['scopes_supported'] == ['personal-mcp/tools']
+    assert metadata['scopes_supported'] == [ORIGIN + '/mcp/tools']
     assert 'jwks_uri' not in metadata
     assert compat.lambda_handler(event('/.well-known/openid-configuration', 'GET'), None)['statusCode'] == 404
 
@@ -125,10 +128,11 @@ def test_gateway_remains_auth_authority_and_challenges_are_rewritten(status, mon
 
 
 @pytest.mark.parametrize('scope, audience, kind, expected_scope, expected_audience', [
-    ('personal-mcp/tools openid', ORIGIN + '/mcp', 'access', True, True),
+    (ORIGIN + '/mcp/tools openid', ORIGIN + '/mcp', 'access', True, True),
     ('openid email', ORIGIN + '/mcp', 'access', False, True),
-    ('personal-mcp/tools', 'other-resource', 'access', True, False),
-    ('personal-mcp/tools', [ORIGIN + '/mcp'], 'access', True, True),
+    (ORIGIN + '/mcp/tools', 'other-resource', 'access', True, False),
+    (ORIGIN + '/mcp/tools', [ORIGIN + '/mcp'], 'access', True, True),
+    ('personal-mcp/tools', ORIGIN + '/mcp', 'access', False, True),
     (None, 'expected-client', 'id', False, False),
     (['personal-mcp/tools'], {'private': 'data'}, 'private-kind', False, False),
 ])
@@ -237,6 +241,7 @@ def test_transport_does_not_follow_redirects():
 def test_private_configuration_cannot_redirect_tokens_to_other_hosts(url, monkeypatch):
     import sys
     import types
+    monkeypatch.setattr(compat, 'gateway_config', GATEWAY_CONFIG)
     monkeypatch.setenv('CONFIG_BUCKET', 'private-bucket')
     monkeypatch.setenv('CONFIG_KEY', 'connection/gateway.json')
     compat._gateway_cache = None
@@ -247,6 +252,25 @@ def test_private_configuration_cannot_redirect_tokens_to_other_hosts(url, monkey
     monkeypatch.setitem(sys.modules, 'boto3', types.SimpleNamespace(client=lambda service: S3()))
     with pytest.raises(ValueError, match='Invalid Gateway'):
         compat.gateway_url()
+
+
+def test_private_configuration_loads_and_caches_expected_client(monkeypatch):
+    import sys
+    import types
+    monkeypatch.setattr(compat, 'gateway_config', GATEWAY_CONFIG)
+    monkeypatch.setenv('CONFIG_BUCKET', 'private-bucket')
+    monkeypatch.setenv('CONFIG_KEY', 'connection/gateway.json')
+    config = {'gateway_url': 'https://example.gateway.bedrock-agentcore.eu-south-1.amazonaws.com/mcp',
+              'oauth_client_id': 'expected-client'}
+    calls = []
+    class S3:
+        def get_object(self, **kwargs):
+            calls.append(kwargs)
+            return {'Body': io.BytesIO(json.dumps(config).encode())}
+    monkeypatch.setitem(sys.modules, 'boto3', types.SimpleNamespace(client=lambda service: S3()))
+    assert compat.gateway_url() == config['gateway_url']
+    assert compat.gateway_config()['oauth_client_id'] == 'expected-client'
+    assert calls == [{'Bucket': 'private-bucket', 'Key': 'connection/gateway.json'}]
 
 
 def test_adapter_package_contains_no_modules_or_credentials(tmp_path):

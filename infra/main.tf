@@ -1,11 +1,12 @@
 data "aws_caller_identity" "current" {}
 data "aws_partition" "current" {}
 locals {
-  root    = abspath("${path.module}/..")
-  enabled = toset(jsondecode(file("${local.root}/config/modules.json")).enabled)
-  modules = { for name in local.enabled : name => jsondecode(file("${local.root}/modules/${name}/manifest.json")) }
-  prefix  = "${var.project_name}-${data.aws_caller_identity.current.account_id}"
-  scope   = "${var.project_name}/tools"
+  root         = abspath("${path.module}/..")
+  enabled      = toset(jsondecode(file("${local.root}/config/modules.json")).enabled)
+  modules      = { for name in local.enabled : name => jsondecode(file("${local.root}/modules/${name}/manifest.json")) }
+  prefix       = "${var.project_name}-${data.aws_caller_identity.current.account_id}"
+  mcp_resource = "${trimsuffix(aws_lambda_function_url.oauth_compat.function_url, "/")}/mcp"
+  scope        = "${local.mcp_resource}/tools"
 }
 resource "aws_s3_bucket" "schemas" {
   bucket        = "${local.prefix}-${var.aws_region}-schemas"
@@ -64,7 +65,7 @@ resource "aws_cognito_user_pool_client" "mcp" {
   generate_secret                      = false
   allowed_oauth_flows_user_pool_client = true
   allowed_oauth_flows                  = ["code"]
-  allowed_oauth_scopes                 = ["openid", "email", "profile", "phone", aws_cognito_resource_server.mcp.scope_identifiers[0]]
+  allowed_oauth_scopes                 = ["openid", "email", "profile", "phone", aws_cognito_resource_server.mcp_bound.scope_identifiers[0]]
   callback_urls                        = var.callback_urls
   logout_urls                          = var.logout_urls
   supported_identity_providers         = ["COGNITO"]
@@ -82,6 +83,18 @@ resource "aws_cognito_user_pool_client" "mcp" {
     access_token  = "minutes"
     id_token      = "minutes"
     refresh_token = "days"
+  }
+}
+# Resource-bound custom scopes must belong to the exact requested resource.
+# Keep the previous resource definition during migration; it is no longer
+# enabled for the app client or accepted by Gateway.
+resource "aws_cognito_resource_server" "mcp_bound" {
+  identifier   = local.mcp_resource
+  name         = "MCP resource-bound tools"
+  user_pool_id = aws_cognito_user_pool.users.id
+  scope {
+    scope_name        = "tools"
+    scope_description = "Access personal MCP tools"
   }
 }
 resource "aws_cognito_user_pool_domain" "mcp" {
@@ -165,7 +178,7 @@ resource "aws_bedrockagentcore_gateway" "mcp" {
       discovery_url    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}/.well-known/openid-configuration"
       allowed_clients  = [aws_cognito_user_pool_client.mcp.id]
       allowed_scopes   = [local.scope]
-      allowed_audience = ["${trimsuffix(aws_lambda_function_url.oauth_compat.function_url, "/")}/mcp"]
+      allowed_audience = [local.mcp_resource]
     }
   }
   depends_on = [aws_iam_role_policy.gateway, aws_cognito_user_pool_domain.mcp]

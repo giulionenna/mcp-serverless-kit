@@ -120,6 +120,13 @@ first update the bootstrap permissions as described above, then run `plan` and
 deployment region. Perform a fresh authorization-code login after the change;
 refreshing an older token preserves its previous audience.
 
+The resource is the exact public MCP URL (including `/mcp`), and the custom
+scope is that URL followed by `/tools`. Use `oauth_scope` from the apply summary
+in both default and base scope fields when the client setup UI provides them.
+Replace the older `personal-mcp/tools` value in existing client configurations;
+it belongs to a different Cognito resource server and cannot be requested
+together with resource binding to the public MCP URL.
+
 ### ChatGPT
 
 Create a custom remote MCP connection in the available developer/plugin settings. Use the apply summary's MCP URL and OAuth authentication with the preconfigured client ID. The kit uses a public client with no client secret; verify that the current setup UI accepts this configuration.

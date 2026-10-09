@@ -1,6 +1,6 @@
 # The public Function URL serves discovery and transports MCP requests.
 # Cognito issues tokens; Gateway validates them, including the public audience.
-# S3 holds only the Gateway URL, breaking the URL -> Gateway -> Lambda cycle.
+# S3 holds the Gateway URL and public client ID, breaking the dependency cycle.
 resource "aws_iam_role" "oauth_compat" {
   name = "${var.project_name}-oauth-compat-lambda"
   assume_role_policy = jsonencode({
@@ -36,10 +36,8 @@ resource "aws_lambda_function" "oauth_compat" {
   memory_size      = 128
   environment {
     variables = {
-      MCP_SCOPE            = local.scope
       COGNITO_OAUTH_ORIGIN = "https://${aws_cognito_user_pool_domain.mcp.domain}.auth.${var.aws_region}.amazoncognito.com"
       COGNITO_TOKEN_ISSUER = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}"
-      COGNITO_CLIENT_ID    = aws_cognito_user_pool_client.mcp.id
       CONFIG_BUCKET        = aws_s3_bucket.schemas.id
       CONFIG_KEY           = "connection/gateway.json"
     }
@@ -58,7 +56,7 @@ resource "aws_lambda_function_url" "oauth_compat" {
 resource "aws_s3_object" "gateway_connection" {
   bucket       = aws_s3_bucket.schemas.id
   key          = "connection/gateway.json"
-  content      = jsonencode({ gateway_url = aws_bedrockagentcore_gateway.mcp.gateway_url })
+  content      = jsonencode({ gateway_url = aws_bedrockagentcore_gateway.mcp.gateway_url, oauth_client_id = aws_cognito_user_pool_client.mcp.id })
   content_type = "application/json"
   depends_on   = [aws_s3_bucket_public_access_block.schemas]
 }

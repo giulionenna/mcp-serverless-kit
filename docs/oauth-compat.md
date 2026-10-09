@@ -28,6 +28,11 @@ and scope. These comparisons never grant access, and claim values are not logged
    ID and exact callback allowlist. It requests `resource=<public MCP URL>` and
    the tools scope. Cognito resource binding sets that URL as access-token
    audience; OAuth refresh preserves the audience.
+   The Cognito resource-server identifier is exactly the public MCP URL. Its
+   custom scope is `<public MCP URL>/tools`, not `<project name>/tools`:
+   Cognito rejects resource-bound requests whose custom scopes belong to a
+   different resource server. Terraform enables the URL-based scope for the
+   client and Gateway; all discovery documents and challenges advertise it.
    The pool explicitly uses the Essentials feature plan and domain branding
    version 2 (Managed Login), with the default branding style assigned to the
    app client. Resource binding is exclusive to Managed Login; the classic
@@ -68,10 +73,13 @@ session validity window; sign in again after that window expires.
 - Maximum input is 1 MiB; maximum upstream response is 4 MiB. Upstream timeout
   is 40 seconds and adapter Lambda timeout is 60 seconds. Keep tools within
   existing module timeouts. Redirects are never followed.
-- Gateway URL configuration lives in the private schemas bucket at
+- Gateway URL and public client ID configuration live in the private schemas bucket at
   `connection/gateway.json`. The adapter reads only that object and caches it
   for 60 seconds. This avoids a circular Terraform URL/audience dependency.
   This configuration contains no secret.
+  The Lambda derives its scope from the trusted Function URL origin, rather
+  than depending on its own URL in environment configuration. This also keeps
+  the Lambda, Cognito client and URL-based resource server free of dependency cycles.
 - Public origin comes from AWS Function URL request context, not Host or
   forwarded headers. Upstream URLs are restricted to regional AWS Gateway
   hostnames. Bodies, tokens and exception strings are never logged by adapter code.
