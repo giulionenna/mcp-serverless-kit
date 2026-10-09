@@ -109,7 +109,7 @@ Resources:
               # starter permits these control-plane operations account-wide in-region.
               - Sid: CognitoControlPlane
                 Effect: Allow
-                Action: ['cognito-idp:CreateUserPool', 'cognito-idp:DescribeUserPool', 'cognito-idp:UpdateUserPool', 'cognito-idp:DeleteUserPool', 'cognito-idp:CreateUserPoolClient', 'cognito-idp:DescribeUserPoolClient', 'cognito-idp:UpdateUserPoolClient', 'cognito-idp:DeleteUserPoolClient', 'cognito-idp:CreateUserPoolDomain', 'cognito-idp:DescribeUserPoolDomain', 'cognito-idp:DeleteUserPoolDomain', 'cognito-idp:UpdateUserPoolDomain', 'cognito-idp:CreateResourceServer', 'cognito-idp:DescribeResourceServer', 'cognito-idp:UpdateResourceServer', 'cognito-idp:DeleteResourceServer', 'cognito-idp:ListTagsForResource', 'cognito-idp:TagResource', 'cognito-idp:UntagResource']
+                Action: ['cognito-idp:CreateUserPool', 'cognito-idp:DescribeUserPool', 'cognito-idp:GetUserPoolMfaConfig', 'cognito-idp:UpdateUserPool', 'cognito-idp:DeleteUserPool', 'cognito-idp:CreateUserPoolClient', 'cognito-idp:DescribeUserPoolClient', 'cognito-idp:UpdateUserPoolClient', 'cognito-idp:DeleteUserPoolClient', 'cognito-idp:CreateUserPoolDomain', 'cognito-idp:DescribeUserPoolDomain', 'cognito-idp:DeleteUserPoolDomain', 'cognito-idp:UpdateUserPoolDomain', 'cognito-idp:CreateResourceServer', 'cognito-idp:DescribeResourceServer', 'cognito-idp:UpdateResourceServer', 'cognito-idp:DeleteResourceServer', 'cognito-idp:ListTagsForResource', 'cognito-idp:TagResource', 'cognito-idp:UntagResource']
                 Resource: '*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               - Sid: GatewayControlPlane

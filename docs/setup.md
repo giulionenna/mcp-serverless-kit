@@ -32,6 +32,24 @@ CloudShell normally includes Boto3. If it does not, install it in a virtual envi
 
 If the stack already exists, inspect its outputs instead of recreating it. If creation fails, use the CloudFormation Events tab to find the failing resource. Do not delete an account-wide OIDC provider used by other projects.
 
+### Update bootstrap permissions
+
+If a deployment reports a missing permission, update the bootstrap from the same
+IAM CloudShell session after pulling the reviewed fix:
+
+```bash
+git pull --ff-only
+python3 scripts/bootstrap.py --region eu-west-1 --update
+```
+
+Use your original bootstrap region. The helper preserves all CloudFormation
+parameter values, including the exact GitHub subject and shared OIDC provider.
+It updates the existing stack without deleting the Terraform state bucket. The
+first live deployment found that the pinned provider also reads
+`cognito-idp:GetUserPoolMfaConfig`; this permission is included in the bootstrap.
+After the update completes, rerun the failed `apply` so Terraform resumes from
+its saved state.
+
 ## 3. Set GitHub repository variables
 
 Open **Settings → Secrets and variables → Actions → Variables** in your fork.

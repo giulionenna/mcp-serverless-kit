@@ -62,3 +62,47 @@ def test_owner_reset_is_explicit_and_does_not_recreate_user(monkeypatch, capsys)
     owner.main()
     assert calls == ['set-password']
     assert 'No email was sent' in capsys.readouterr().out
+
+def test_bootstrap_update_preserves_trust_and_storage_parameters():
+    bootstrap = load('bootstrap')
+    calls = []
+    class ClientError(Exception):
+        pass
+    class Waiter:
+        def wait(self, **kwargs):
+            calls.append(('wait', kwargs))
+    class Client:
+        def describe_stacks(self, **kwargs):
+            return {'Stacks': [{'Parameters': [
+                {'ParameterKey': 'ProjectName', 'ParameterValue': 'personal-mcp'},
+                {'ParameterKey': 'GitHubSubject', 'ParameterValue': 'repo:owner@1/kit@2:ref:refs/heads/main'},
+                {'ParameterKey': 'ExistingOidcProviderArn', 'ParameterValue': 'shared-provider'},
+            ]}]}
+        def update_stack(self, **kwargs):
+            calls.append(('update', kwargs))
+        def get_waiter(self, name):
+            assert name == 'stack_update_complete'
+            return Waiter()
+    bootstrap.update_stack(Client(), 'personal-mcp-bootstrap', 'template', ClientError)
+    request = calls[0][1]
+    assert request['StackName'] == 'personal-mcp-bootstrap'
+    assert request['Parameters'] == [
+        {'ParameterKey': 'ProjectName', 'UsePreviousValue': True},
+        {'ParameterKey': 'GitHubSubject', 'UsePreviousValue': True},
+        {'ParameterKey': 'ExistingOidcProviderArn', 'UsePreviousValue': True},
+    ]
+    assert calls[1] == ('wait', {'StackName': 'personal-mcp-bootstrap'})
+
+def test_bootstrap_update_with_no_changes_is_successful(capsys):
+    bootstrap = load('bootstrap')
+    class ClientError(Exception):
+        response = {'Error': {'Code': 'ValidationError', 'Message': 'No updates are to be performed.'}}
+    class Client:
+        def describe_stacks(self, **kwargs):
+            return {'Stacks': [{'Parameters': []}]}
+        def update_stack(self, **kwargs):
+            raise ClientError()
+        def get_waiter(self, name):
+            pytest.fail('There is no update to wait for')
+    bootstrap.update_stack(Client(), 'personal-mcp-bootstrap', 'template', ClientError)
+    assert 'already up to date' in capsys.readouterr().out

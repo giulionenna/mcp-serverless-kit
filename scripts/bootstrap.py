@@ -1,14 +1,30 @@
 #!/usr/bin/env python3
-"""Create the initial AWS trust/state stack from CloudShell; requires no local coding."""
+"""Create or update AWS trust/state from CloudShell; requires no local coding."""
 import argparse
 from pathlib import Path
 import re
 import sys
 
+def update_stack(cf, stack, template, client_error):
+    current = cf.describe_stacks(StackName=stack)['Stacks'][0]
+    parameters = [{'ParameterKey': p['ParameterKey'], 'UsePreviousValue': True}
+                  for p in current['Parameters']]
+    try:
+        cf.update_stack(StackName=stack, TemplateBody=template, Parameters=parameters,
+                        Capabilities=['CAPABILITY_NAMED_IAM'])
+    except client_error as error:
+        if error.response['Error'].get('Message') == 'No updates are to be performed.':
+            print('Bootstrap is already up to date.')
+            return
+        raise
+    print('Updating bootstrap permissions while preserving trust and state storage.')
+    cf.get_waiter('stack_update_complete').wait(StackName=stack)
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--region', default='eu-west-1')
     parser.add_argument('--project', default='personal-mcp')
+    parser.add_argument('--update', action='store_true', help='Update an existing bootstrap stack, preserving all parameter values.')
     args = parser.parse_args()
     if not sys.stdin.isatty():
         raise SystemExit('Run bootstrap in interactive AWS CloudShell.')
@@ -21,6 +37,16 @@ def main():
     print('AWS region:', args.region)
     if identity['Arn'].endswith(':root'):
         raise SystemExit('Sign in to CloudShell as your IAM user or role rather than root.')
+    cf = boto3.client('cloudformation', region_name=args.region)
+    stack = args.project + '-bootstrap'
+    template = (Path(__file__).resolve().parents[1] / 'bootstrap/github-oidc.yaml').read_text()
+    if args.update:
+        try:
+            update_stack(cf, stack, template, ClientError)
+        except Exception:
+            raise SystemExit('Bootstrap update did not complete. Inspect CloudFormation stack events; do not delete the stack or state bucket.')
+        print('Bootstrap update completed. Rerun the failed deployment with operation apply.')
+        return
     subject = input('Paste GitHubSubject from the Show AWS OIDC subject workflow summary: ').strip()
     if not subject.startswith('repo:') or not subject.endswith(':ref:refs/heads/main') or '*' in subject:
         raise SystemExit('Use the exact main-branch subject printed by the workflow.')
@@ -33,9 +59,6 @@ def main():
             existing = ''
         else:
             raise SystemExit('Cannot check the existing OIDC provider. Verify IAM permissions.')
-    cf = boto3.client('cloudformation', region_name=args.region)
-    stack = args.project + '-bootstrap'
-    template = (Path(__file__).resolve().parents[1] / 'bootstrap/github-oidc.yaml').read_text()
     print('Creating', stack, '(IAM deployment role and private Terraform state bucket).')
     try:
         cf.create_stack(StackName=stack, TemplateBody=template, Parameters=[{'ParameterKey':'ProjectName','ParameterValue':args.project},{'ParameterKey':'GitHubSubject','ParameterValue':subject},{'ParameterKey':'ExistingOidcProviderArn','ParameterValue':existing}], Capabilities=['CAPABILITY_NAMED_IAM'])
