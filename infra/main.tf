@@ -145,6 +145,11 @@ resource "aws_bedrockagentcore_gateway" "mcp" {
   role_arn        = aws_iam_role.gateway.arn
   authorizer_type = "CUSTOM_JWT"
   protocol_type   = "MCP"
+  protocol_configuration {
+    mcp {
+      supported_versions = ["2025-03-26", "2025-06-18", "2025-11-25", "2026-07-28"]
+    }
+  }
   authorizer_configuration {
     custom_jwt_authorizer {
       discovery_url    = "https://cognito-idp.${var.aws_region}.amazonaws.com/${aws_cognito_user_pool.users.id}/.well-known/openid-configuration"

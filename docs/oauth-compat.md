@@ -51,7 +51,11 @@ session validity window; sign in again after that window expires.
   authorization decision and remains JWT-protected, including audience checks.
 - Stateless POST requests return JSON. GET/DELETE on `/mcp` return 405. Optional
   standalone SSE streams, sampling and elicitation are not provided.
+- Gateway explicitly supports MCP 2025-03-26, 2025-06-18, 2025-11-25 and
+  2026-07-28. Older clients use `initialize`; the newest version uses
+  `server/discover` and per-request metadata.
 - Upstream `Accept` is `application/json`. RPC bodies, protocol/session headers
+  and MCP method/name routing headers
   and safe response headers are preserved. Cookies and caller routing headers
   are dropped. 401/403 challenges point to public adapter metadata.
 - Maximum input is 1 MiB; maximum upstream response is 4 MiB. Upstream timeout
@@ -64,6 +68,18 @@ session validity window; sign in again after that window expires.
 - Public origin comes from AWS Function URL request context, not Host or
   forwarded headers. Upstream URLs are restricted to regional AWS Gateway
   hostnames. Bodies, tokens and exception strings are never logged by adapter code.
+- CloudWatch diagnostics contain only known method/version categories, upstream
+  HTTP status, numeric JSON-RPC error code, tool count and fixed failure category.
+  After reproducing a connection failure, inspect them with:
+
+  ```sh
+  aws logs tail /aws/lambda/personal-mcp-oauth-compat --since 10m --region eu-south-1 --format short --filter-pattern '{ $.event = "mcp_*" }'
+  ```
+
+  Use your own project name and region for other deployments. An upstream 401/403
+  means API authorization failed despite the browser login; an RPC error or
+  non-JSON response identifies a separate protocol/transport failure. Do not
+  remove JWT checks to diagnose a failure.
 - A valid token for a different audience must be rejected by Gateway, even when
   issuer, client and scope otherwise match. Include this in live tests.
 

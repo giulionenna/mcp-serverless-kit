@@ -88,6 +88,27 @@ def test_transport_preserves_token_and_rpc_but_drops_unneeded_headers(monkeypatc
     assert 'Set-Cookie' not in result['headers']
 
 
+def test_stateless_discovery_preserves_required_routing_headers(monkeypatch):
+    requests = []
+    class Opener:
+        def open(self, request, timeout):
+            requests.append(request)
+            return Upstream(b'{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{"tools":{}}}}')
+    monkeypatch.setattr(compat, 'gateway_url', lambda: 'https://gateway.example/mcp')
+    monkeypatch.setattr(compat.urllib.request, 'build_opener', lambda *args: Opener())
+    request = event(token='Bearer original.signed.token')
+    request['body'] = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'server/discover',
+                                 'params': {'_meta': {'io.modelcontextprotocol/protocolVersion': '2026-07-28'}}})
+    request['headers'].update({'mcp-protocol-version': '2026-07-28', 'mcp-method': 'server/discover', 'mcp-name': 'example___echo'})
+    result = compat.lambda_handler(request, None)
+    assert result['statusCode'] == 200
+    assert requests[0].get_header('Mcp-method') == 'server/discover'
+    assert requests[0].get_header('Mcp-name') == 'example___echo'
+    assert requests[0].get_header('Mcp-protocol-version') == '2026-07-28'
+    assert json.loads(requests[0].data) == json.loads(request['body'])
+    assert json.loads(result['body'])['result']['supportedVersions'] == ['2026-07-28']
+
+
 @pytest.mark.parametrize('status', [401, 403])
 def test_gateway_remains_auth_authority_and_challenges_are_rewritten(status, monkeypatch):
     class Opener:
@@ -116,7 +137,41 @@ def test_exceptions_never_disclose_tokens(monkeypatch, capsys):
     result = compat.lambda_handler(event(token='Bearer secret.token'), None)
     assert result['statusCode'] == 502
     assert 'secret' not in json.dumps(result)
-    assert capsys.readouterr().out == ''
+    logs = capsys.readouterr().out
+    assert 'secret' not in logs
+    assert 'configuration_or_internal_error' in logs
+
+
+def test_diagnostics_distinguish_rpc_error_without_logging_data(monkeypatch, capsys):
+    class Opener:
+        def open(self, request, timeout):
+            return Upstream(b'{"jsonrpc":"2.0","id":1,"error":{"code":-32022,"message":"secret response body","data":{"token":"private"}}}')
+    monkeypatch.setattr(compat, 'gateway_url', lambda: 'https://gateway.example/mcp')
+    monkeypatch.setattr(compat.urllib.request, 'build_opener', lambda *args: Opener())
+    request = event(token='Bearer secret.token')
+    request['headers']['mcp-protocol-version'] = 'secret-header'
+    request['body'] = json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'secret-method', 'params': {'password': 'private'}})
+    compat.lambda_handler(request, None)
+    logs = capsys.readouterr().out
+    assert 'secret' not in logs and 'private' not in logs
+    entries = [json.loads(line) for line in logs.splitlines()]
+    assert entries == [
+        {'event': 'mcp_request', 'method': 'other', 'version': 'other_or_absent'},
+        {'event': 'mcp_upstream', 'status': 200},
+        {'event': 'mcp_rpc_error', 'code': -32022},
+    ]
+
+
+def test_non_json_upstream_is_diagnosed_without_logging_response(monkeypatch, capsys):
+    class Opener:
+        def open(self, request, timeout):
+            return Upstream(b'private upstream content')
+    monkeypatch.setattr(compat, 'gateway_url', lambda: 'https://gateway.example/mcp')
+    monkeypatch.setattr(compat.urllib.request, 'build_opener', lambda *args: Opener())
+    assert compat.lambda_handler(event(token='Bearer secret.token'), None)['statusCode'] == 502
+    logs = capsys.readouterr().out
+    assert 'invalid_upstream_json' in logs
+    assert 'private' not in logs and 'secret' not in logs
 
 
 def test_transport_does_not_follow_redirects():

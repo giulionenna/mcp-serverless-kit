@@ -16,12 +16,33 @@ from urllib.parse import urlsplit
 
 MAX_BODY = 1024 * 1024
 MAX_RESPONSE = 4 * 1024 * 1024
+PROTOCOL_VERSIONS = {'2025-03-26', '2025-06-18', '2025-11-25', '2026-07-28'}
+DIAGNOSTIC_METHODS = {'initialize', 'notifications/initialized', 'server/discover',
+                      'tools/list', 'tools/call', 'resources/list',
+                      'resources/templates/list', 'resources/read', 'prompts/list',
+                      'prompts/get', 'ping'}
 _gateway_cache = None
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
+
+
+def diagnostic(event, **fields):
+    # Callers supply only fixed categories, numeric codes and counts. Never
+    # pass a request/response body, arbitrary header or exception message.
+    print(json.dumps({'event': event, **fields}), flush=True)
+
+
+def request_diagnostic(message, headers):
+    method = message.get('method')
+    params = message.get('params')
+    params = params if isinstance(params, dict) else {}
+    version = headers.get('mcp-protocol-version', params.get('protocolVersion'))
+    diagnostic('mcp_request',
+               method=method if isinstance(method, str) and method in DIAGNOSTIC_METHODS else 'other',
+               version=version if isinstance(version, str) and version in PROTOCOL_VERSIONS else 'other_or_absent')
 
 
 def response(status, body=None, headers=None):
@@ -105,8 +126,11 @@ def forward(event, public_origin, headers):
             raise ValueError('Expected JSON object')
     except (ValueError, UnicodeError):
         return response(400, {'error': 'Invalid JSON request'})
+    request_diagnostic(message, headers)
     outbound = {'Authorization': authorization, 'Content-Type': 'application/json', 'Accept': 'application/json'}
-    for name in ('mcp-protocol-version', 'mcp-session-id'):
+    # MCP 2026-07-28 binds method/name headers to the JSON-RPC body. Dropping
+    # these headers makes a conformant request invalid at Gateway.
+    for name in ('mcp-protocol-version', 'mcp-session-id', 'mcp-method', 'mcp-name'):
         if name in headers:
             outbound[name] = headers[name]
     request = urllib.request.Request(gateway_url(), data=body, headers=outbound, method='POST')
@@ -117,6 +141,7 @@ def forward(event, public_origin, headers):
         upstream = error
     with upstream:
         status = upstream.status
+        diagnostic('mcp_upstream', status=status)
         if status in (401, 403):
             return response(status, {'error': 'Authentication required' if status == 401 else 'Insufficient permissions'}, challenge(public_origin, status == 403))
         if status >= 500 or 300 <= status < 400:
@@ -125,6 +150,13 @@ def forward(event, public_origin, headers):
         if len(data) > MAX_RESPONSE:
             return response(502, {'error': 'Gateway response too large'})
         result = json.loads(data) if data else None
+        if isinstance(result, dict):
+            error = result.get('error')
+            if isinstance(error, dict) and type(error.get('code')) is int:
+                diagnostic('mcp_rpc_error', code=error['code'])
+            payload = result.get('result')
+            if isinstance(payload, dict) and isinstance(payload.get('tools'), list):
+                diagnostic('mcp_tools', count=len(payload['tools']))
         output_headers = {name: upstream.headers[name] for name in ('Mcp-Session-Id', 'Mcp-Protocol-Version', 'Retry-After') if name in upstream.headers}
         return response(status, result, output_headers)
 
@@ -144,6 +176,10 @@ def lambda_handler(event, context):
             return response(405, {'error': 'Stateless MCP endpoint supports POST'}, {'Allow': 'POST'})
         headers = {k.lower(): v for k, v in event.get('headers', {}).items()}
         return forward(event, public_origin, headers)
-    except Exception:
+    except Exception as error:
         # No exception text: upstream libraries may put tokens in messages.
+        category = ('invalid_upstream_json' if isinstance(error, json.JSONDecodeError)
+                    else 'transport_error' if isinstance(error, (urllib.error.URLError, TimeoutError))
+                    else 'configuration_or_internal_error')
+        diagnostic('mcp_failure', category=category)
         return response(502, {'error': 'MCP service unavailable'})
