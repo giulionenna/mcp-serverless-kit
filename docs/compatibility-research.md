@@ -1,6 +1,6 @@
 # OAuth compatibility research: AgentCore Gateway + Cognito
 
-Research date: 2026-10-08. This is a docs-based assessment, not a test result; neither ChatGPT nor Claude compatibility has been tested. Compatibility remains conditional on live preflight checks below. A known OAuth metadata gap may block MCP clients even though Cognito supports PKCE at its authorization endpoint.
+Research date: 2026-10-08. This is the historical docs-based assessment from before client testing; the native-discovery proposal below is not the current installation procedure. Use the [README runbook](../README.md) for setup and [verification evidence](verification.md) for current status. On 2026-10-09 the owner reported a working ChatGPT connection and tools with the resource-bound OAuth adapter. Claude and refresh after token expiry remain unverified.
 
 Update 2026-10-09: the original AWS deployment completed and live Cognito
 discovery confirmed the missing S256 field. The current implementation adds an
