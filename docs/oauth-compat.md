@@ -100,6 +100,11 @@ session validity window; sign in again after that window expires.
   means API authorization failed despite the browser login; an RPC error or
   non-JSON response identifies a separate protocol/transport failure. Do not
   remove JWT checks to diagnose a failure.
+  The **MCP diagnostics** GitHub workflow can read the last ten minutes or
+  follow these safe events for three minutes. It assumes the existing deploy
+  role through OIDC, with `logs:FilterLogEvents` limited to this adapter's log
+  group. It does not enable body or credential logging. Updating bootstrap
+  permissions also grants the provider's required `ListUserPoolClients` read.
 - A valid token for a different audience must be rejected by Gateway, even when
   issuer, client and scope otherwise match. Include this in live tests.
 

@@ -1,0 +1,51 @@
+name: MCP diagnostics
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Read recent safe diagnostics or follow for three minutes
+        type: choice
+        options: [snapshot, follow]
+        default: snapshot
+        required: true
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: mcp-diagnostics
+  cancel-in-progress: false
+jobs:
+  diagnostics:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      MCP_PROJECT_NAME: ${{ vars.MCP_PROJECT_NAME || 'personal-mcp' }}
+      DIAGNOSTIC_MODE: ${{ inputs.mode }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: mcp-kit-diagnostics
+      - name: Read safe MCP diagnostics
+        shell: bash
+        run: |
+          if [[ ! "$MCP_PROJECT_NAME" =~ ^[a-z][a-z0-9-]{2,24}$ ]]; then
+            echo "Invalid project name"
+            exit 1
+          fi
+          args=(logs tail "/aws/lambda/$MCP_PROJECT_NAME-oauth-compat"
+                --since 10m --region "$AWS_REGION" --format short
+                --filter-pattern '{ $.event = "mcp_*" }')
+          if [[ "$DIAGNOSTIC_MODE" == "follow" ]]; then
+            set +e
+            timeout 180 aws "${args[@]}" --follow
+            status=$?
+            set -e
+            if [[ "$status" != 0 && "$status" != 124 ]]; then exit "$status"; fi
+            echo "Diagnostic observation window ended."
+          else
+            aws "${args[@]}"
+          fi

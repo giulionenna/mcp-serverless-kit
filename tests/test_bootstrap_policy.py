@@ -108,3 +108,22 @@ def test_branding_permissions_do_not_grant_user_creation_or_token_access():
     arn = f'arn:aws:cognito-idp:{REGION}:{ACCOUNT}:userpool/{REGION}_example'
     assert not matches('cognito-idp:AdminCreateUser', arn)
     assert not matches('cognito-idp:AdminInitiateAuth', arn)
+
+
+def test_branding_client_discovery_is_limited_to_user_pools_in_account_and_region():
+    arn = f'arn:aws:cognito-idp:{REGION}:{ACCOUNT}:userpool/{REGION}_example'
+    action = 'cognito-idp:ListUserPoolClients'
+    assert matches(action, arn)
+    assert not matches(action, arn.replace(ACCOUNT, '999999999999'))
+    assert not matches(action, arn.replace(REGION, 'eu-north-1'), 'eu-north-1')
+    assert not matches('cognito-idp:ListUserPoolClientSecrets', arn)
+
+
+def test_diagnostics_read_only_the_adapter_log_group():
+    arn = f'arn:aws:logs:{REGION}:{ACCOUNT}:log-group:/aws/lambda/personal-mcp-oauth-compat:*'
+    action = 'logs:FilterLogEvents'
+    assert matches(action, arn)
+    assert not matches(action, arn.replace('-oauth-compat', '-garmin'))
+    assert not matches(action, arn.replace(ACCOUNT, '999999999999'))
+    assert not matches(action, arn.replace(REGION, 'eu-north-1'), 'eu-north-1')
+    assert not matches('logs:GetLogEvents', arn)

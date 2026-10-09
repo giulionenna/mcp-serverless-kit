@@ -107,6 +107,11 @@ Resources:
                 Effect: Allow
                 Action: logs:DescribeLogGroups
                 Resource: '*'
+              - Sid: OAuthCompatibilityDiagnostics
+                Effect: Allow
+                Action: logs:FilterLogEvents
+                Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-oauth-compat:*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               - Sid: GarminSecretContainer
                 Effect: Allow
                 Action: ['secretsmanager:CreateSecret', 'secretsmanager:DescribeSecret', 'secretsmanager:UpdateSecret', 'secretsmanager:DeleteSecret', 'secretsmanager:RestoreSecret', 'secretsmanager:TagResource', 'secretsmanager:UntagResource', 'secretsmanager:GetResourcePolicy']
@@ -121,6 +126,12 @@ Resources:
               - Sid: CognitoManagedLoginBranding
                 Effect: Allow
                 Action: ['cognito-idp:CreateManagedLoginBranding', 'cognito-idp:DescribeManagedLoginBranding', 'cognito-idp:UpdateManagedLoginBranding', 'cognito-idp:DeleteManagedLoginBranding']
+                Resource: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*'
+                Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
+              # Provider refresh resolves the app client that owns the style.
+              - Sid: CognitoManagedLoginClientDiscovery
+                Effect: Allow
+                Action: cognito-idp:ListUserPoolClients
                 Resource: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*'
                 Condition: {StringEquals: {'aws:RequestedRegion': !Ref 'AWS::Region'}}
               - Sid: GatewayControlPlane
