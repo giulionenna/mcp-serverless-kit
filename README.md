@@ -460,7 +460,7 @@ Pushing a template change alone does not update AWS IAM: an authorized administr
 | Module | Tools | Status |
 | --- | --- | --- |
 | `example` | `echo`, `add` | Default; no external account |
-| `garmin` | `daily_stats`, `sleep`, `activities` | Optional; personal login required |
+| `garmin` | Daily stats, sleep, activities/details, heart rate, stress, Body Battery, HRV, training readiness | Optional; [private login and tool reference](docs/garmin.md) |
 | SmartThings | Not implemented | New integration needed |
 
 Terraform publishes definitions to private S3 and registers one Lambda target per module. [Module authoring](docs/modules.md) explains schemas, dispatch and packaging. New secrets/permissions require explicit infrastructure changes; a manifest does not grant IAM access.
