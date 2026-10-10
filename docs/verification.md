@@ -2,20 +2,21 @@
 
 Evidence for one installation does not automatically prove compatibility for every fork, client or external account. Follow the [README's setup gates](../README.md#installation-map) for each new installation.
 
-## Current evidence, 2026-10-09
+## Current evidence, 2026-10-10
 
 | Check | Evidence/status |
 | --- | --- |
-| Python regression checks, including bootstrap resource/region scoping | 94 tests passed in CI and final apply workflow |
+| Python regression checks, including bootstrap resource/region scoping | 122 tests passed in login-diagnostics CI; 119 tests passed in the Garmin apply workflow |
 | Build, Terraform formatting/provider schema validation | Passed in CI with Terraform 1.13.4 and AWS provider 6.54.0 |
-| AWS deployment/update | Completed in `eu-south-1`; final scope migration added 1 resource, changed 5, destroyed 0 |
+| AWS deployment/update | Garmin activation completed in `eu-south-1`: 8 added, 2 changed, 0 destroyed |
 | Public OAuth/protected-resource metadata, PKCE S256 advertisement, missing-token 401 | Final workflow preflight passed |
 | URL-bound scope with resource and registered callback | Credential-free authorization probe redirected to Cognito login without OAuth error; this alone is not a login or tool test |
 | ChatGPT OAuth, discovery and example tools | Owner reported everything working after creating/configuring Personal MCP v2; user-reported live result, not an independently captured authenticated trace |
 | Adapter CloudWatch diagnostics through GitHub OIDC | Snapshot workflows succeeded; empty windows are not OAuth-success evidence |
 | Refresh after access-token expiry | Pending live verification |
 | Claude or other client authorization/tools | Pending live verification |
-| Real Garmin account reads/renewal | Pending live verification |
+| Real Garmin account reads | Recent-activities read succeeded through Lambda; owner confirmed discovery and successful tool use from a fresh ChatGPT conversation on 2026-10-10 |
+| Garmin session renewal/concurrent renewal | Pending live verification |
 | Complete destroy and retained-resource cleanup | Pending live verification |
 
 - [Validate run 37950293793](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/37950293793): 94 tests and build/provider checks succeeded.
@@ -25,11 +26,13 @@ Evidence for one installation does not automatically prove compatibility for eve
 
 ## Garmin integration checks, 2026-10-10
 
-- Local regression suite: **111 passed**, including nine-tool routing, invalid inputs, session refresh persistence, private project-based login and redacted failure/output paths. Dependency downloads used the committed SHA-256 hashes.
-- Built `example`, `garmin` and OAuth adapter Lambda ZIPs for Python 3.12 / manylinux2014 x86_64. The generic enabled-module configuration remains `example` only; `config/modules.garmin.example.json` is the optional build example.
-- Installed the interactive login's complete hash-locked dependencies into a clean Python 3.12 virtual environment; `pip check`, boto3/Garmin imports and all nine Garmin method signatures passed without account requests.
-- Terraform 1.13.4 formatting, initialization with backend disabled and readonly provider lock, and provider schema validation passed. These checks did not plan or apply AWS resources.
-- Real Garmin credentials/MFA, AWS-hosted reads and concurrent renewal remain **pending**. Follow [the Garmin runbook](garmin.md) for each personal account; local mocks are not live Garmin evidence.
+- Garmin activation [PR #9](https://github.com/giulionenna/mcp-serverless-kit/pull/9) enables `example` and `garmin`. The deployment workflow now uses GitHub web identity without external Actions, respecting the repository's owner-only Actions policy.
+- [Main validation run 38050624165](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/38050624165) passed 119 tests, hash-verified builds, login dependency checks and Terraform 1.13.4 / AWS provider validation. The login-diagnostics [PR #10 validation run 38052021574](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/38052021574) subsequently passed 122 tests and the same checks.
+- [Plan run 38050693672](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/38050693672) and [apply run 38050799414](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/38050799414) succeeded: 8 resources added, 2 changed, 0 destroyed. The apply's OAuth preflight passed. Actual connected-client `echo` and `add(2, 3)` calls still succeeded after deployment.
+- The owner completed the private interactive Garmin login. A Secrets Manager metadata read confirmed that a session version exists; no secret value was printed. An independent synchronous invocation of the deployed Garmin Lambda with `activities(limit=1)` returned a valid activity list. Only success status was recorded, without health data.
+- The owner then confirmed Garmin tools are visible and work from a fresh ordinary ChatGPT conversation. This is user-reported MCP client evidence; individual per-tool results were not independently captured. The Lambda read above is a separate independently observed account-read check.
+- The owner reported large returned payloads. Size measurements and optimization are deferred in [issue #11](https://github.com/giulionenna/mcp-serverless-kit/issues/11); no transport-limit failure has been established.
+- Garmin renewal/concurrency and OAuth refresh after expiry remain pending. Follow [the Garmin runbook](garmin.md) for each personal account; one successful installation does not establish universal account/device/client compatibility.
 
 ## What earlier failures established
 

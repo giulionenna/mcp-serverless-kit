@@ -2,6 +2,8 @@
 
 This optional module adds nine read-only tools to the existing personal MCP endpoint. It follows the Garmin Connect API approach of [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp), reviewed at commit [`cfc5d799ab0f165e837f1188a1d093c65838aaf7`](https://github.com/Taxuspt/garmin_mcp/tree/cfc5d799ab0f165e837f1188a1d093c65838aaf7). That MIT-licensed project runs a FastMCP server; this kit adapts the same underlying `garminconnect` read methods to AgentCore's manifest and Lambda dispatch rather than running a stdio process in Lambda. No upstream source is vendored. The kit retains its own hash-pinned `garminconnect==0.3.17` dependency and does not install upstream's older dependency set.
 
+Live verification on 2026-10-10: a real activities read succeeded through the deployed Lambda, and the owner confirmed tool discovery and successful use from a fresh ChatGPT conversation. See [verification evidence](verification.md). Returned JSON can be large; compact responses are deferred in [issue #11](https://github.com/giulionenna/mcp-serverless-kit/issues/11).
+
 ## Tools
 
 All responses use `{"data": ...}` with Garmin's original JSON. Missing measurements can be empty or null; availability depends on the device and Garmin account. Dates are explicit `YYYY-MM-DD` Garmin calendar dates. No tool changes activities, workouts or account settings.
