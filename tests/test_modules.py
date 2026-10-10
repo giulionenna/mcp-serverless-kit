@@ -182,3 +182,123 @@ def test_external_schema_uri_is_rejected(keyword, tmp_path, monkeypatch):
     monkeypatch.setattr(build, 'ROOT', tmp_path)
     with pytest.raises(ValueError, match='local schema'):
         build.validate_manifest('bad')
+
+
+@pytest.mark.parametrize('name,arguments,method,expected', [
+    ('heart_rates', {'date': '2026-10-09'}, 'get_heart_rates', ('2026-10-09',)),
+    ('stress', {'date': '2026-10-09'}, 'get_stress_data', ('2026-10-09',)),
+    ('body_battery', {'date': '2026-10-09'}, 'get_body_battery', ('2026-10-09', '2026-10-09')),
+    ('hrv', {'date': '2026-10-09'}, 'get_hrv_data', ('2026-10-09',)),
+    ('training_readiness', {'date': '2026-10-09'}, 'get_training_readiness', ('2026-10-09',)),
+    ('activity', {'activity_id': 123}, 'get_activity', (123,)),
+])
+def test_garmin_extended_reads(monkeypatch, name, arguments, method, expected):
+    garmin = handler('garmin')
+    calls = []
+    def fetch(*args):
+        calls.append(args)
+        return {'measurement': 42}
+    instance = types.SimpleNamespace(client=types.SimpleNamespace(dumps=lambda: '{"fake":"token"}'))
+    setattr(instance, method, fetch)
+    secrets = types.SimpleNamespace(put_secret_value=lambda **kwargs: pytest.fail('Unchanged tokens must not be written'))
+    monkeypatch.setattr(garmin, 'client', lambda: (instance, {'tokens': {'fake': 'token'}}, secrets, 'test-arn'))
+    assert garmin.lambda_handler(arguments, context(name)) == {'data': {'measurement': 42}}
+    assert calls == [expected]
+
+
+@pytest.mark.parametrize('arguments', [{'activity_id': 0}, {'activity_id': True}, {'activity_id': '123'}, {'activity_id': 123, 'extra': 1}])
+def test_garmin_invalid_activity_id_does_not_authenticate(monkeypatch, arguments):
+    garmin = handler('garmin')
+    monkeypatch.setattr(garmin, 'client', lambda: pytest.fail('Invalid input must not authenticate'))
+    assert 'error' in garmin.lambda_handler(arguments, context('activity'))
+
+
+def test_garmin_direct_output_and_exception_are_redacted(monkeypatch, capsys):
+    import logging
+    garmin = handler('garmin')
+    def fail():
+        print('PRIVATE_SESSION')
+        print('PRIVATE_HEALTH_DATA', file=sys.stderr)
+        logging.warning('PRIVATE_PASSWORD')
+        raise RuntimeError('PRIVATE_TOKEN')
+    monkeypatch.setattr(garmin, 'client', fail)
+    previous = logging.root.manager.disable
+    result = garmin.lambda_handler({'limit': 1}, context('activities'))
+    assert 'error' in result
+    assert 'PRIVATE_' not in json.dumps(result)
+    output = capsys.readouterr()
+    assert 'PRIVATE_' not in output.out + output.err
+    assert logging.root.manager.disable == previous
+
+
+@pytest.mark.parametrize('secret', [[], {'tokens': {}}, {'tokens': {'fake': 'token'}, 'is_cn': 'false'}])
+def test_garmin_invalid_secret_is_safe(monkeypatch, secret):
+    monkeypatch.setitem(sys.modules, 'garminconnect', types.SimpleNamespace(Garmin=lambda **kwargs: pytest.fail('Invalid secret must not login')))
+    monkeypatch.setitem(sys.modules, 'boto3', types.SimpleNamespace(client=lambda service: types.SimpleNamespace(get_secret_value=lambda **kwargs: {'SecretString': json.dumps(secret)})))
+    monkeypatch.setenv('GARMIN_SECRET_ARN', 'test-arn')
+    result = handler('garmin').lambda_handler({'limit': 1}, context('activities'))
+    assert result == {'error': 'Garmin token secret is invalid. Renew authentication.'}
+
+
+def test_garmin_project_secret_resolved_before_credentials(monkeypatch, capsys):
+    from scripts import garmin_login
+    import logging
+    events = []
+    def describe(**kwargs):
+        assert kwargs == {'SecretId': 'personal-mcp/garmin'}
+        events.append('describe')
+        raise RuntimeError('PRIVATE_AWS_ERROR')
+    def aws_client(service, **kwargs):
+        assert service == 'secretsmanager' and kwargs == {'region_name': 'eu-south-1'}
+        return types.SimpleNamespace(describe_secret=describe)
+    monkeypatch.setattr(sys, 'argv', ['login', '--region', 'eu-south-1', '--project', 'personal-mcp'])
+    monkeypatch.setattr(sys, 'stdin', types.SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(garmin_login.getpass, 'getpass', lambda *args, **kwargs: pytest.fail('No credentials before secret resolution'))
+    monkeypatch.setitem(sys.modules, 'garminconnect', types.SimpleNamespace(Garmin=object))
+    monkeypatch.setitem(sys.modules, 'boto3', types.SimpleNamespace(client=aws_client))
+    previous = logging.root.manager.disable
+    try:
+        assert garmin_login.main() == 1
+    finally:
+        logging.disable(previous)
+    assert events == ['describe']
+    output = capsys.readouterr()
+    assert 'not found or inaccessible' in output.err
+    assert 'PRIVATE_' not in output.err
+
+
+@pytest.mark.parametrize('write_fails', [False, True])
+def test_garmin_project_login_saves_verified_session_privately(monkeypatch, capsys, write_fails):
+    from scripts import garmin_login
+    import logging
+    writes = []
+    class Garmin:
+        def __init__(self, **kwargs):
+            self.initial = 'email' in kwargs
+            self.client = types.SimpleNamespace(dumps=lambda: json.dumps({'session': 'initial' if self.initial else 'verified'}))
+        def login(self, *args):
+            if not self.initial:
+                assert json.loads(args[0]) == {'session': 'initial'}
+            print('PRIVATE_LIBRARY_OUTPUT')
+    def put(**kwargs):
+        writes.append(kwargs)
+        if write_fails:
+            raise RuntimeError('PRIVATE_AWS_ERROR')
+    def aws_client(service, **kwargs):
+        assert service == 'secretsmanager' and kwargs == {'region_name': 'eu-south-1'}
+        return types.SimpleNamespace(describe_secret=lambda **kwargs: {'ARN': 'test-arn'}, put_secret_value=put)
+    monkeypatch.setattr(sys, 'argv', ['login', '--region', 'eu-south-1', '--project', 'personal-mcp', '--china'])
+    monkeypatch.setattr(sys, 'stdin', types.SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(garmin_login.getpass, 'getpass', lambda *args, **kwargs: 'PRIVATE_CREDENTIAL')
+    monkeypatch.setitem(sys.modules, 'garminconnect', types.SimpleNamespace(Garmin=Garmin))
+    monkeypatch.setitem(sys.modules, 'boto3', types.SimpleNamespace(client=aws_client))
+    previous = logging.root.manager.disable
+    try:
+        assert garmin_login.main() == int(write_fails)
+    finally:
+        logging.disable(previous)
+    assert writes == [{'SecretId': 'test-arn', 'SecretString': json.dumps({'tokens': {'session': 'verified'}, 'is_cn': True})}]
+    output = capsys.readouterr()
+    assert 'PRIVATE_' not in output.out + output.err
+    if not write_fails:
+        assert 'Session tokens stored in AWS Secrets Manager' in output.out

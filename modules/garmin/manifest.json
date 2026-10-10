@@ -1,6 +1,6 @@
 {
   "name": "garmin",
-  "description": "garmin read-only tools",
+  "description": "Read-only Garmin Connect health and activity tools",
   "tools": [
     {
       "name": "daily_stats",
@@ -52,6 +52,113 @@
         },
         "required": [
           "limit"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "heart_rates",
+      "description": "Read heart rate measurements for a calendar date.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "stress",
+      "description": "Read stress measurements for a calendar date.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "body_battery",
+      "description": "Read Body Battery energy measurements for one calendar date.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "hrv",
+      "description": "Read heart rate variability data for a calendar date, if supported by the device.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "training_readiness",
+      "description": "Read training readiness for a calendar date, if supported by the device.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "description": "Calendar date YYYY-MM-DD",
+            "format": "date"
+          }
+        },
+        "required": [
+          "date"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "name": "activity",
+      "description": "Read the details of one Garmin activity using an ID returned by activities.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "activity_id": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "activity_id"
         ],
         "additionalProperties": false
       }

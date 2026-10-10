@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Interactively bootstrap Garmin token secret; run outside Terraform.
 Requires garminconnect==0.3.17 and boto3 in a local virtual environment.
-Existing secret ARN only: create an empty secret separately with AWS CLI.
+Uses the existing Terraform secret; does not create infrastructure.
 """
 import argparse
 import contextlib
 import getpass
-import io
 import json
 import logging
 import sys
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--secret-arn', required=True)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument('--secret-arn', help='Existing Terraform secret ARN')
+    target.add_argument('--project', help='Terraform project name; resolves its existing Garmin secret')
     parser.add_argument('--region', required=True)
     parser.add_argument('--china', action='store_true')
     args = parser.parse_args()
@@ -24,26 +25,34 @@ def main():
     import boto3
     from garminconnect import Garmin
     logging.disable(logging.CRITICAL)
+    secrets = boto3.client('secretsmanager', region_name=args.region)
+    try:
+        arn = args.secret_arn or secrets.describe_secret(SecretId=args.project + '/garmin')['ARN']
+    except Exception:
+        print('Existing Garmin secret not found or inaccessible. Enable and deploy the module first.', file=console)
+        return 1
     email = getpass.getpass('Garmin email (hidden): ', stream=console)
     password = getpass.getpass('Garmin password: ', stream=console)
     def mfa():
         return getpass.getpass('Garmin MFA code: ', stream=console)
     try:
         # Suppress library stdout/stderr; never print raw upstream exceptions.
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        # Discard dependency output instead of keeping sensitive text in buffers.
+        with open('/dev/null', 'w') as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
             client = Garmin(email=email, password=password, is_cn=args.china, prompt_mfa=mfa)
             client.login()
             tokens = json.loads(client.client.dumps())
             check = Garmin(is_cn=args.china)
             check.login(json.dumps(tokens))
-            boto3.client('secretsmanager', region_name=args.region).put_secret_value(
-                SecretId=args.secret_arn,
+            tokens = json.loads(check.client.dumps())
+            secrets.put_secret_value(
+                SecretId=arn,
                 SecretString=json.dumps({'tokens': tokens, 'is_cn': args.china}),
             )
     except Exception:
         print('Authentication or secret update failed. Check account, MFA and AWS permissions.', file=sys.stderr)
         return 1
-    print('Token secret updated. No credentials were stored.')
+    print('Session tokens stored in AWS Secrets Manager. No password or local token file was saved.')
     return 0
 if __name__ == '__main__':
     sys.exit(main())

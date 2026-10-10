@@ -23,6 +23,14 @@ Evidence for one installation does not automatically prove compatibility for eve
 - [Diagnostics run 37952691958](https://github.com/giulionenna/mcp-serverless-kit/actions/runs/37952691958): scoped adapter-log read succeeded.
 - The owner confirmed the working ChatGPT setup on 2026-10-09 after these changes. No password, token or personal tool-result body is included in this evidence.
 
+## Garmin integration checks, 2026-10-10
+
+- Local regression suite: **111 passed**, including nine-tool routing, invalid inputs, session refresh persistence, private project-based login and redacted failure/output paths. Dependency downloads used the committed SHA-256 hashes.
+- Built `example`, `garmin` and OAuth adapter Lambda ZIPs for Python 3.12 / manylinux2014 x86_64. The generic enabled-module configuration remains `example` only; `config/modules.garmin.example.json` is the optional build example.
+- Installed the interactive login's complete hash-locked dependencies into a clean Python 3.12 virtual environment; `pip check`, boto3/Garmin imports and all nine Garmin method signatures passed without account requests.
+- Terraform 1.13.4 formatting, initialization with backend disabled and readonly provider lock, and provider schema validation passed. These checks did not plan or apply AWS resources.
+- Real Garmin credentials/MFA, AWS-hosted reads and concurrent renewal remain **pending**. Follow [the Garmin runbook](garmin.md) for each personal account; local mocks are not live Garmin evidence.
+
 ## What earlier failures established
 
 The first direct-Cognito discovery lacked PKCE S256 metadata. Adding the public adapter resolved that metadata contract. Function URLs remapped `WWW-Authenticate`, so the preflight/client path uses standard well-known discovery fallback. Successful infrastructure apply did not automatically imply a successful client flow.
