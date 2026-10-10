@@ -302,3 +302,35 @@ def test_garmin_project_login_saves_verified_session_privately(monkeypatch, caps
     assert 'PRIVATE_' not in output.out + output.err
     if not write_fails:
         assert 'Session tokens stored in AWS Secrets Manager' in output.out
+
+
+@pytest.mark.parametrize('failure_stage', ['account', 'verification', 'update'])
+def test_garmin_login_reports_safe_failure_stage(monkeypatch, capsys, failure_stage):
+    from scripts import garmin_login
+    import logging
+    class PrivateError(Exception):
+        response = types.SimpleNamespace(status_code=403, text='PRIVATE_RESPONSE')
+    class Garmin:
+        def __init__(self, **kwargs):
+            self.initial = 'email' in kwargs
+            self.client = types.SimpleNamespace(dumps=lambda: '{"session":"PRIVATE_TOKEN"}')
+        def login(self, *args):
+            if failure_stage == ('account' if self.initial else 'verification'):
+                raise PrivateError('PRIVATE_PASSWORD')
+    def put(**kwargs):
+        assert failure_stage == 'update'
+        raise PrivateError('PRIVATE_AWS_RESPONSE')
+    monkeypatch.setattr(sys, 'argv', ['login', '--region', 'eu-south-1', '--secret-arn', 'test-arn'])
+    monkeypatch.setattr(sys, 'stdin', types.SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(garmin_login.getpass, 'getpass', lambda *args, **kwargs: 'PRIVATE_CREDENTIAL')
+    monkeypatch.setitem(sys.modules, 'garminconnect', types.SimpleNamespace(Garmin=Garmin))
+    monkeypatch.setitem(sys.modules, 'boto3', types.SimpleNamespace(client=lambda *args, **kwargs: types.SimpleNamespace(put_secret_value=put)))
+    previous = logging.root.manager.disable
+    try:
+        assert garmin_login.main() == 1
+    finally:
+        logging.disable(previous)
+    output = capsys.readouterr()
+    stage = {'account': 'Garmin account login', 'verification': 'Garmin session verification', 'update': 'AWS Secrets Manager update'}[failure_stage]
+    assert stage + ' failed (PrivateError, HTTP 403)' in output.err
+    assert 'PRIVATE_' not in output.out + output.err

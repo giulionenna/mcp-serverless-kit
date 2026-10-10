@@ -75,7 +75,8 @@ Every call reloads the latest secret, reads Garmin data and persists changed ses
 | Symptom | Action |
 | --- | --- |
 | Secret not found/inaccessible before login | Verify module apply completed, region/project and DescribeSecret permission. |
-| Authentication or secret update failed | Check Garmin account/MFA and scoped PutSecretValue permission privately; rerun the helper once the cause is resolved. |
+| Garmin account login/session verification failed | The message identifies the stage and exception class (and HTTP status when available), without response bodies. Check account/MFA and connectivity privately. The secret was not updated. |
+| AWS Secrets Manager update failed | Garmin session verification passed; check scoped PutSecretValue permission and the AWS session. |
 | Tool unavailable after deployment | Finish the helper login, verify the Lambda secret ARN/role, then retry a read. |
 | Garmin tools absent | Verify module target deployment and refresh discovery in the existing client. |
 | Empty HRV/readiness/Body Battery | Verify the device supports that measurement and has synchronized data for that date. |

@@ -35,22 +35,36 @@ def main():
     password = getpass.getpass('Garmin password: ', stream=console)
     def mfa():
         return getpass.getpass('Garmin MFA code: ', stream=console)
+    stage = 'Garmin account login'
     try:
         # Suppress library stdout/stderr; never print raw upstream exceptions.
         # Discard dependency output instead of keeping sensitive text in buffers.
         with open('/dev/null', 'w') as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
             client = Garmin(email=email, password=password, is_cn=args.china, prompt_mfa=mfa)
             client.login()
+            stage = 'Garmin session serialization'
             tokens = json.loads(client.client.dumps())
+            stage = 'Garmin session verification'
             check = Garmin(is_cn=args.china)
             check.login(json.dumps(tokens))
             tokens = json.loads(check.client.dumps())
+            stage = 'AWS Secrets Manager update'
             secrets.put_secret_value(
                 SecretId=arn,
                 SecretString=json.dumps({'tokens': tokens, 'is_cn': args.china}),
             )
-    except Exception:
-        print('Authentication or secret update failed. Check account, MFA and AWS permissions.', file=sys.stderr)
+    except Exception as error:
+        # Exception class and bounded HTTP status are useful; exception text,
+        # response bodies and arbitrary AWS error codes can contain secrets.
+        status = getattr(getattr(error, 'response', None), 'status_code', None)
+        detail = type(error).__name__
+        if type(status) is int and 100 <= status <= 599:
+            detail += f', HTTP {status}'
+        print(f'{stage} failed ({detail}). No credentials or response body were printed.', file=console)
+        if stage == 'AWS Secrets Manager update':
+            print('Check secretsmanager:PutSecretValue permission for the existing Garmin secret.', file=console)
+        else:
+            print('Check Garmin account/MFA and connectivity. The AWS secret was not updated.', file=console)
         return 1
     print('Session tokens stored in AWS Secrets Manager. No password or local token file was saved.')
     return 0
