@@ -26,3 +26,7 @@ This is a personal, single-owner MCP deployment. Treat its tools and any returne
 ## Current infrastructure boundaries
 
 The module Lambda roles are scoped to their own log groups, with Garmin secret access only when enabled. The adapter can read only its Gateway configuration object and write its logs. The Gateway role is constrained to the current AWS account and Gateway ARN pattern, can invoke only module Lambdas, and can read only schema objects under `schemas/`. Terraform does not configure per-user authorization; bootstrap supplies the state bucket and deployment role. These boundaries need review before turning this personal template into a shared service.
+
+## Deployment runner web identity
+
+The deployment workflow uses only shell/Python steps so it also works with an owner-only Actions policy. `scripts/github_oidc.py` requests the job identity with audience `sts.amazonaws.com` and writes it to a mode-0600 file in the temporary runner directory. It exports only AWS web-identity selectors to `GITHUB_ENV`; Terraform's AWS SDK exchanges the token through STS under the existing role trust conditions. No access keys, session credentials or JWT are printed. The workflow removes the file in an always-run cleanup step; the hosted runner is ephemeral. Main-branch dispatch and existing OIDC subject/audience restrictions remain required.

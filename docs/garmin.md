@@ -26,7 +26,7 @@ In AWS CloudShell, clone **your fork** using its GitHub Code → HTTPS URL and e
 
 ## 2. Enable and deploy the optional module
 
-Edit `config/modules.json` in a task branch:
+This checkout enables Garmin alongside the example module. For a fork or checkout that has disabled it, edit `config/modules.json` in a task branch:
 
 ```json
 {"enabled": ["example", "garmin"]}

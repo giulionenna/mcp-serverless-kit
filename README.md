@@ -79,7 +79,7 @@ Read this README before changing configuration. Inspect `bootstrap/github-oidc.y
 | Branch | `main` |
 | Project | `personal-mcp` |
 | Region | `eu-south-1` (Europe/Milan), enable first if needed |
-| Modules | `{"enabled": ["example"]}` |
+| Modules | Current `config/modules.json`; this checkout enables `example` and `garmin` |
 | Bootstrap stack | `personal-mcp-bootstrap` |
 | Terraform state key | `terraform.tfstate` |
 | GitHub subject | **Show AWS OIDC subject** summary, never guessed |
