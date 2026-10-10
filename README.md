@@ -1,6 +1,18 @@
 # MCP Serverless Kit
 
-Deploy a personal, modular MCP server on AWS and connect it to ChatGPT. Give this repository to a coding agent: this README is its installation runbook, from an empty AWS account to a real authenticated tool call.
+## What this repository is for
+
+Run your own MCP server in your personal AWS account and let ChatGPT use tools connected to your services. MCP is the protocol that lets an AI assistant call external tools. Once connected, you use the tools through ordinary conversation.
+
+The kit includes Garmin Connect tools for activities, sleep and health measurements, plus example tools to test your connection. You can add more services as modules using the [module guide](docs/modules.md).
+
+To get started:
+
+1. Fork this repository and have an AWS account and a ChatGPT account that supports custom MCP apps.
+2. Give the prompt below to your coding agent to guide the AWS setup. Enter passwords and MFA privately when needed; credentials stay outside the public repository.
+3. Connect the deployed server to ChatGPT, complete the [Garmin login](docs/garmin.md), and ask questions such as “Summarize my latest workouts.”
+
+The rest of this README is the coding agent's installation runbook, from account setup to a verified tool call.
 
 The kit uses **Amazon Bedrock AgentCore Gateway, Lambda, Cognito, S3 and GitHub Actions OIDC**. The browser-only route needs no always-running server, local Terraform installation or AWS access keys in GitHub. AWS CloudShell handles the operations requiring an AWS administrator or a hidden password prompt.
 
