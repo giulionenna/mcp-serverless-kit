@@ -4,7 +4,7 @@ Deploy a personal, modular MCP server on AWS and connect it to ChatGPT. Give thi
 
 The kit uses **Amazon Bedrock AgentCore Gateway, Lambda, Cognito, S3 and GitHub Actions OIDC**. The browser-only route needs no always-running server, local Terraform installation or AWS access keys in GitHub. AWS CloudShell handles the operations requiring an AWS administrator or a hidden password prompt.
 
-**Verified baseline, 2026-10-09:** deployment and metadata checks passed in `eu-south-1`; CI passed 94 tests; the owner reported a working ChatGPT connection and tools after the resource-bound scope migration. Refresh after token expiry, Claude, real Garmin access and full teardown are separate checks and remain unverified. See [verification evidence](docs/verification.md).
+**Verified baseline, 2026-10-10:** Garmin is deployed in `eu-south-1`; CI passed 122 tests; a real Garmin activities read succeeded through Lambda, and the owner confirmed Garmin discovery and successful calls from a fresh ChatGPT conversation. Refresh after expiry, concurrent Garmin renewal, Claude and full teardown remain separate unverified checks. Large Garmin responses are tracked in [issue #11](https://github.com/giulionenna/mcp-serverless-kit/issues/11). See [verification evidence](docs/verification.md).
 
 ## Give this prompt to your coding agent
 
