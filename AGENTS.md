@@ -12,7 +12,9 @@ Before changing anything:
 
 1. Inspect the current checkout, branch, working-tree changes and relevant files.
    Preserve user changes; do not assume the deployment matches this checkout.
-2. Read the README and the focused documentation for the requested task.
+2. Read [project status](docs/project-status.md), the README and the focused
+   documentation for the requested task. Project status carries the shared
+   context for new chats; do not assume another chat's history is available.
 3. Determine whether the task is code development, installation or live diagnosis.
    Repository access alone grants neither AWS access nor client-settings access.
 4. Reuse existing stacks, state and client configuration. Resolve identifiers from
@@ -28,6 +30,7 @@ verification succeeded.
 
 | Path | Responsibility |
 | --- | --- |
+| `docs/project-status.md` | Current priorities, decisions, open work and handoff context |
 | `config/modules.json` | Enabled modules; starts with `example` |
 | `modules/<name>/manifest.json` | Tool names, descriptions and JSON Schema contract |
 | `modules/<name>/handler.py` | Module implementations and Lambda entry point |
@@ -44,6 +47,19 @@ verification succeeded.
 Consult [modules](docs/modules.md), [OAuth adapter](docs/oauth-compat.md),
 [security](docs/security.md), [Garmin](docs/garmin.md) and
 [verification](docs/verification.md) as appropriate.
+
+## Shared project context
+
+Update `docs/project-status.md` in the same pull request when work changes a
+priority, decision, blocker, verification status or next step. Keep it concise;
+link to issues, PRs and focused documentation instead of copying chat transcripts.
+Distinguish repository implementation, user-reported results and live verification.
+Recheck issue/PR state and environment access before relying on dated observations.
+Record missing requirements explicitly rather than inventing decisions from an
+unavailable conversation. Store no credentials, personal health data, private chat
+details or installation-specific identifiers in this public project context.
+Git changes must be committed and published through the repository workflow to
+reach other cloud checkouts; local edits alone are not shared chat memory.
 
 ## Development and checks
 
