@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).parents[1]
-ACCOUNT = '138410486348'
+ACCOUNT = '123456789012'
 REGION = 'eu-south-1'
 DIRECTORY = f'arn:aws:bedrock-agentcore:{REGION}:{ACCOUNT}:workload-identity-directory/default'
 IDENTITY = DIRECTORY + '/workload-identity/service-generated-gateway-identity'
